@@ -1,0 +1,293 @@
+---
+title: "HW1"
+output: html_document
+date: "2023-10-02"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE)
+
+# Load packages
+pacman::p_load(ggplot2, tidyverse, here)
+```
+
+
+### Quesiton 3
+
+```{r}
+# x ~ iid N(0,2)
+
+# Set n's
+n = c(10, 100, 1000)
+
+# Set number of simulations
+sims = 10000
+
+# Create a bunch of sample means 
+xbars = sapply(1:sims, function(sims){
+  # Simulate x's for each value of n
+  x = sapply(1:length(n), function(i){
+    rnorm(n[i], 0, 2)
+  })
+
+  # Calculate sample means for each n
+  xbar = sapply(1:length(n), function(i){
+    1/n[i]*sum(x[[i]])
+  })
+})
+
+# flip dimensions of xbars to make it more intuitive
+xbars = t(xbars)
+
+# Name columns for pretty output
+colnames(xbars) = c("10", "100", "1000")
+
+```
+
+#### Part a)
+
+```{r}
+# Calculate means for each n
+x_means = colMeans(xbars)
+
+# Calculate variances for each n
+x_vars = sapply(1:length(n), function(i){var(xbars[,i])})
+names(x_vars) = c("10", "100", "1000")
+
+# Make the output nice
+(samp_mean_normal_df = data.frame(x_means, x_vars))
+```
+
+#### Part b)
+
+```{r}
+# Calculate which simulations have absolute value greater than 0.1
+xbars_large = abs(xbars) > 0.1
+
+# Calculate the percentage for each n
+large_percentage = sapply(1:length(n), function(i){
+  percentage = sum(xbars_large[,i]) / nrow(xbars_large)
+})
+
+names(large_percentage) = c("10", "100", "1000")
+large_percentage
+```
+
+#### Part c)
+
+```{r}
+# Same as earlier part but instead of sample mean its dividing by sqrt(n)
+xbars_sqrt = sapply(1:sims, function(sims){
+  # Simulate x's for each value of n
+  x = sapply(1:length(n), function(i){
+    rnorm(n[i], 0, sqrt(2))
+  })
+
+  # Calculate sample means for each n
+  xbar = sapply(1:length(n), function(i){
+    1/sqrt(n[i])*sum(x[[i]])
+  })
+})
+
+# flip dimensions of xbars to make it more intuitive
+xbars_sqrt = t(xbars_sqrt)
+
+# Name columns for pretty output
+colnames(xbars_sqrt) = c("10", "100", "1000")
+colnames(xbars) = c("10", "100", "1000")
+
+# Rearrange data frame to make it work for graphing
+xbars_graph = pivot_longer(as.data.frame(xbars_sqrt), cols = c("10", "100", "1000"))
+
+# Graph kernal density
+xbars_graph |> filter(name == "10") |> 
+  ggplot(aes(x = value)) +
+  geom_density(color = "Blue") +
+  stat_function(fun = dnorm, args = list(sd = sqrt(2))) +
+  xlab("Value") +
+  ylab("Density") +
+  labs(title = "Kernal Density for N = 10") +
+  cowplot::theme_cowplot()
+ggsave(here("plots", "n=10.pdf"))
+
+xbars_graph |> filter(name == "100") |> 
+  ggplot(aes(x = value)) +
+  geom_density(color = "Blue") +
+  stat_function(fun = dnorm, args = list(sd = sqrt(2))) +
+  xlab("Value") +
+  ylab("Density") +
+  labs(title = "Kernal Density for N = 100") +
+  cowplot::theme_cowplot()
+ggsave(here("plots", "n=100.pdf"))
+
+
+xbars_graph |> filter(name == "1000") |> 
+  ggplot(aes(x = value)) +
+  geom_density(color = "Blue") +
+  stat_function(fun = dnorm, args = list(sd = sqrt(2))) +
+  xlab("Value") +
+  ylab("Density") +
+  labs(title = "Kernal Density for N = 1000") +
+  cowplot::theme_cowplot()
+ggsave(here("plots", "n=1000.pdf"))
+
+
+
+# Calculate ks.test
+sapply(1:length(n), function(i){
+  ks.test(xbars_sqrt[,i],dnorm)
+})
+```
+
+#### Part d)
+
+```{r}
+# x ~ Bernoulli(0,0.8)
+
+# Set n's
+n = c(10, 100, 1000)
+
+# Set number of simulations
+sims = 10000
+
+# Create a bunch of sample means 
+xbars_binom = sapply(1:sims, function(sims){
+  # Simulate x's for each value of n
+  x = sapply(1:length(n), function(i){
+    rbinom(n[i], 1, 0.8)
+  })
+
+  # Calculate sample means for each n
+  xbar = sapply(1:length(n), function(i){
+    1/n[i]*sum(x[[i]])
+  })
+})
+
+# flip dimensions of xbars to make it more intuitive
+xbars_binom = t(xbars_binom)
+
+# Name columns for pretty output
+colnames(xbars_binom) = c("10", "100", "1000")
+
+# Calculate means for each n
+x_means_binom = colMeans(xbars_binom)
+
+# Calculate variances for each n
+x_vars_binom = sapply(1:length(n), function(i){var(xbars_binom[,i])})
+names(x_vars_binom) = c("10", "100", "1000")
+
+# Make the output nice
+(samp_mean_binom_df = data.frame(x_means_binom, x_vars_binom))
+```
+
+#### Part e)
+
+```{r}
+# Same as earlier part but instead of sample mean its dividing by sqrt(n)
+xbars_sqrt_binom = sapply(1:sims, function(sims){
+  # Simulate x's for each value of n
+  x = sapply(1:length(n), function(i){
+    rbinom(n[i], 1, 0.8)
+  })
+
+  # Calculate sample means for each n
+  xbar = sapply(1:length(n), function(i){
+    sqrt(n[i])*(1/n[i]*sum(x[[i]]) - 0.8)
+  })
+})
+
+# flip dimensions of xbars to make it more intuitive
+xbars_sqrt_binom = t(xbars_sqrt_binom)
+
+# Name columns for pretty output
+colnames(xbars_sqrt_binom) = c("10", "100", "1000")
+
+# Get empirical variance for comparison distribution
+x_vars_sqrt_binom = sapply(1:length(n), function(i){var(xbars_sqrt_binom[,i])})
+
+# Rearrange data frame to make it work for graphing
+xbars_sqrt_binom_graph = pivot_longer(as.data.frame(xbars_sqrt_binom), cols = c("10", "100", "1000"))
+
+# Graph kernal density
+xbars_sqrt_binom_graph |> filter(name == "10") |> 
+  ggplot(aes(x = value)) +
+  geom_density(color = 'blue') +
+  stat_function(fun = dnorm, args = list(sd = sqrt(x_vars_sqrt_binom[1]))) +
+  xlab("Value") +
+  ylab("Density") +
+  labs(title = "Kernal Density for N = 10") +
+  cowplot::theme_cowplot()
+ggsave(here("Plots", "Binom N=10.pdf"))
+
+xbars_sqrt_binom_graph |> filter(name == "100") |> 
+  ggplot(aes(x = value)) +
+  geom_density(color = 'blue') +
+  stat_function(fun = dnorm, args = list(sd = sqrt(x_vars_sqrt_binom[1]))) +
+  xlab("Value") +
+  ylab("Density") +
+  labs(title = "Kernal Density for N = 100") +
+  cowplot::theme_cowplot()
+ggsave(here("Plots", "Binom N=100.pdf"))
+
+
+xbars_sqrt_binom_graph |> filter(name == "1000") |> 
+  ggplot(aes(x = value)) +
+  geom_density(color = 'blue') +
+  stat_function(fun = dnorm, args = list(sd = sqrt(x_vars_sqrt_binom[1]))) +
+  xlab("Value") +
+  ylab("Density") +
+  labs(title = "Kernal Density for N = 1000") +
+  cowplot::theme_cowplot()
+ggsave(here("Plots", "Binom N=1000.pdf"))
+
+# Calculate ks.test
+sapply(1:length(n), function(i){
+  ks.test(xbars_sqrt_binom[i,],dnorm)
+})
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
