@@ -103,40 +103,37 @@ xbars_graph = pivot_longer(as.data.frame(xbars_sqrt), cols = c("10", "100", "100
 # Graph kernal density
 xbars_graph |> filter(name == "10") |> 
   ggplot(aes(x = value)) +
-  geom_density(color = "Blue") +
+  geom_density(color = "blue") +
   stat_function(fun = dnorm, args = list(sd = sqrt(2))) +
   xlab("Value") +
   ylab("Density") +
   labs(title = "Kernal Density for N = 10") +
   cowplot::theme_cowplot()
-ggsave(here("plots", "n=10.pdf"))
 
 xbars_graph |> filter(name == "100") |> 
   ggplot(aes(x = value)) +
-  geom_density(color = "Blue") +
+  geom_density(color = "blue") +
   stat_function(fun = dnorm, args = list(sd = sqrt(2))) +
   xlab("Value") +
   ylab("Density") +
   labs(title = "Kernal Density for N = 100") +
   cowplot::theme_cowplot()
-ggsave(here("plots", "n=100.pdf"))
 
 
 xbars_graph |> filter(name == "1000") |> 
   ggplot(aes(x = value)) +
-  geom_density(color = "Blue") +
+  geom_density(color = "blue") +
   stat_function(fun = dnorm, args = list(sd = sqrt(2))) +
   xlab("Value") +
   ylab("Density") +
   labs(title = "Kernal Density for N = 1000") +
   cowplot::theme_cowplot()
-ggsave(here("plots", "n=1000.pdf"))
 
 
 
 # Calculate ks.test
 sapply(1:length(n), function(i){
-  ks.test(xbars_sqrt[,i],dnorm)
+  ks.test(xbars_sqrt[,i], "pnorm", 0, sqrt(2))
 })
 ```
 
@@ -218,42 +215,220 @@ xbars_sqrt_binom_graph |> filter(name == "10") |>
   ylab("Density") +
   labs(title = "Kernal Density for N = 10") +
   cowplot::theme_cowplot()
-ggsave(here("Plots", "Binom N=10.pdf"))
 
 xbars_sqrt_binom_graph |> filter(name == "100") |> 
   ggplot(aes(x = value)) +
   geom_density(color = 'blue') +
-  stat_function(fun = dnorm, args = list(sd = sqrt(x_vars_sqrt_binom[1]))) +
+  stat_function(fun = dnorm, args = list(sd = sqrt(x_vars_sqrt_binom[2]))) +
   xlab("Value") +
   ylab("Density") +
   labs(title = "Kernal Density for N = 100") +
   cowplot::theme_cowplot()
-ggsave(here("Plots", "Binom N=100.pdf"))
 
 
 xbars_sqrt_binom_graph |> filter(name == "1000") |> 
   ggplot(aes(x = value)) +
   geom_density(color = 'blue') +
-  stat_function(fun = dnorm, args = list(sd = sqrt(x_vars_sqrt_binom[1]))) +
+  stat_function(fun = dnorm, args = list(sd = sqrt(x_vars_sqrt_binom[3]))) +
   xlab("Value") +
   ylab("Density") +
   labs(title = "Kernal Density for N = 1000") +
   cowplot::theme_cowplot()
-ggsave(here("Plots", "Binom N=1000.pdf"))
 
 # Calculate ks.test
 sapply(1:length(n), function(i){
-  ks.test(xbars_sqrt_binom[i,],dnorm)
+  ks.test(xbars_sqrt_binom[,i], "pnorm", 0, sqrt(0.16))
 })
 ```
 
+### Question 5)
 
+#### a)
 
+```{r}
+# Set n and sims
+N = 100
+sims = 10000
 
+# Simulate data a bunch of times
+beta = sapply(1:sims, function(i){
+  
+  # Simulate data
+  x = matrix(c(rep(1,N), rnorm(N, 0, 2)), ncol = 2)
+  e = rnorm(N, 0, 1)
+  
+  # Calculate y
+  y = 2*x[,2] + e
+  
+  # Calculate OLS estimator
+  beta = solve(t(x)%*%x)%*%t(x)%*%y
+  
+})
 
+# Calculate mean and variance
+(means = sapply(1:2, function(i){mean(beta[i,])}))
+(vars = sapply(1:2, function(i){var(beta[i,])}))
 
+```
 
+#### b)
 
+```{r}
+beta_graph = as.data.frame(t(beta))
+
+# Graph densities
+beta_graph |> ggplot(aes(x = V1)) + 
+  geom_density(color = 'red') +
+  stat_function(fun = dnorm, args = list(sd = 0.1)) +
+  xlab("Value") +
+  ylab("Density") +
+  labs(title = "Kernal Density for Beta 0") +
+  cowplot::theme_cowplot()
+
+beta_graph |> ggplot(aes(x = V2)) + 
+  geom_density(color = 'red') +
+  stat_function(fun = dnorm, args = list(mean = 2, sd = 0.05)) +
+  xlab("Value") +
+  ylab("Density") +
+  labs(title = "Kernal Density for Beta 1") +
+  cowplot::theme_cowplot()
+
+# Run ks test for both betas
+ks.test(beta_graph$V1, 'pnorm', 0, 0.1)
+ks.test(beta_graph$V2, 'pnorm', 2, 0.05)
+```
+
+#### c)
+
+```{r}
+# set vector of n's 
+n = c(10, 100, 1000)
+
+# Calculate betas for each n
+beta_ns = sapply(1:sims, function(i){
+  
+  sapply(1:3, function(i){
+    # Simulate data
+    x = matrix(c(rep(1,n[i]), rnorm(n[i], 0, 2)), ncol = 2)
+    e = rnorm(n[i], 0, 1)
+  
+    # Calculate y
+    y = 2*x[,2] + e
+  
+    # Calculate OLS estimator
+    beta = solve(t(x)%*%x)%*%t(x)%*%y
+    
+    # Centered distribution of betas
+    sqrt(n[i])*(beta - c(0,2))
+  }) 
+})
+
+# KS test for n = 10 for beta 0 then beta1
+ks.test(beta_ns[1,], 'pnorm', 0, 1)
+ks.test(beta_ns[2,], 'pnorm', 0, 0.5)
+
+# n = 100
+ks.test(beta_ns[3,], 'pnorm', 0, 1)
+ks.test(beta_ns[4,], 'pnorm', 0, 0.5)
+
+# n = 1000
+ks.test(beta_ns[5,], 'pnorm', 0, 1)
+ks.test(beta_ns[6,], 'pnorm', 0, 0.5)
+```
+
+#### d)
+
+```{r}
+# same as part a, but we're now making the errors ~ U(0,2)
+# Set n and sims
+N = 100
+sims = 10000
+
+# Simulate data a bunch of times
+beta = sapply(1:sims, function(i){
+  
+  # Simulate data
+  x = matrix(c(rep(1,N), rnorm(N, 0, 2)), ncol = 2)
+  e = runif(N, 0, 2)
+  
+  # Calculate y
+  y = 2*x[,2] + e
+  
+  # Calculate OLS estimator
+  beta = solve(t(x)%*%x)%*%t(x)%*%y
+  
+})
+
+# Calculate mean and variance
+(means = sapply(1:2, function(i){mean(beta[i,])}))
+(vars = sapply(1:2, function(i){var(beta[i,])}))
+```
+
+#### e)
+
+```{r}
+# Same as part c, but we're changing the erros again. We could have written a function which takes the error distribution as an argument, but that seems harder than just copy pasting 
+# set vector of n's 
+n = c(10, 100, 1000)
+
+# Calculate betas for each n
+beta_ns = sapply(1:1, function(q){
+  
+  sapply(1:3, function(i){
+    # Simulate data
+    x = matrix(c(rep(1,n[i]), rnorm(n[i], 0, 2)), ncol = 2)
+    e = runif(n[i], 0, 2)
+  
+    # Calculate y
+    y = 2*x[,2] + e
+  
+    # Calculate OLS estimator
+    beta = solve(t(x)%*%x)%*%t(x)%*%y
+    
+    # Centered distribution of betas
+    sqrt(n[i])*(beta - c(1,2))
+  }) 
+})
+
+# KS test for n = 10 for beta 0 then beta1
+ks.test(beta_ns[1,], 'pnorm', 0, 1/3)
+ks.test(beta_ns[2,], 'pnorm', 0, I(1/3+1/4))
+
+# n = 100
+ks.test(beta_ns[3,], 'pnorm', 0, 1/3)
+ks.test(beta_ns[4,], 'pnorm', 0, I(1/3+1/4))
+
+# n = 1000
+ks.test(beta_ns[5,], 'pnorm', 0, 1/3)
+ks.test(beta_ns[6,], 'pnorm', 0, I(1/3+1/4))
+```
+
+#### e)
+
+```{r}
+# Now add correlation between x and epsilon
+
+# Set n and sims
+N = 100
+sims = 10000
+
+# Simulate data a bunch of times
+beta = sapply(1:sims, function(i){
+  
+  # Simulate data
+  x_e = MASS::mvrnorm(n = 100, c(0,0), matrix(c(4,.4,.4,1), nrow = 2))
+  
+  # Calculate y
+  y = 2*x_e[,1] + x_e[,2]
+  
+  # Calculate OLS estimator
+  x = matrix(c(rep(1,N), x_e[,1]), ncol = 2)
+  beta = solve(t(x)%*%x)%*%t(x)%*%y
+  
+})
+
+colMeans(t(beta))
+```
 
 
 
