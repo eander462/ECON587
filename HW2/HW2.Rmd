@@ -1,0 +1,169 @@
+---
+title: "HW2"
+author: "Erik Andersen"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE)
+```
+
+### Question 1
+
+```{r}
+# Load packages
+pacman::p_load(tidyverse, haven, here, fixest, magrittr, margins)
+
+# load data
+df = read_dta(here("data", "Econ587_Field2010_data.dta"))
+
+# Subset the data to only the rows that have values for our variable of interest
+field_df = df |> filter(!is.na(HH_Income))
+```
+
+#### a)
+
+```{r}
+# Estimate linear prob model
+non_robust = field_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,.)
+
+summary(non_robust)
+```
+
+#### b)
+
+```{r}
+# Reestimate but with robust se's
+robust = field_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,., vcov = "hetero")
+
+summary(robust)
+
+non_robust$se > robust$se # Smaller SE's for all but HH_income
+```
+
+#### c)
+
+```{r}
+# Generate fitted values from both regressions
+fitted_nonrobust = non_robust$fitted.values
+fitted_robust = robust$fitted.values
+
+# Check they're identical
+sum(fitted_nonrobust == fitted_robust) - length(fitted_nonrobust == fitted_robust) # Roundabout way to check all values are true
+
+# Find range of fitted values
+max(fitted_robust); min(fitted_robust) # None outside of 0,1
+```
+
+#### d)
+
+```{r}
+# the weights are just our residuals. Calculate again for robust and non-robust
+# Define weights
+non_weights = 1 / lm(abs(non_robust$residuals) ~ non_robust$fitted.values)$fitted.values^2
+weights = 1 / lm(abs(robust$residuals) ~ robust$fitted.values)$fitted.values^2
+
+
+non_robust_weighted = field_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,., weights = non_weights)
+summary(non_robust_weighted)
+
+robust_weighted = field_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,., vcov = "hetero", weights = weights)
+summary(robust_weighted)
+```
+
+#### f)
+
+```{r}
+# Add interaction between age and Muslim. 
+interact = field_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat + Client_Age*muslim,.)
+
+summary(interact)
+```
+
+### Question 2)
+
+#### a)
+
+```{r}
+# Same regression, but with logit model
+logit = df %>% glm(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat,., family = binomial(link = 'logit'))
+summary(logit)
+
+# now probit
+probit = df %>% glm(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat,., family = binomial(link = 'probit'))
+summary(probit)
+```
+
+#### b)
+
+```{r}
+# We already have the predicted values stored as the fitted values in the two regression objects
+logit_predict = logit$fitted.values
+probit_predict = probit$fitted.values
+
+# Get the correlation
+cor(logit_predict, probit_predict) # Almost exactly perfectly correlated
+
+```
+
+#### c)
+
+```{r}
+# calculate mean of ages
+xbar = mean(df$Client_Age)
+# Calculate beta for age
+beta = coefficients(probit)[3]
+
+# Define function for normal pdf for late use
+g = function(x){
+  1/(2*pi)*exp(-1/2*x^2)
+}
+
+# Plug into pdf for pdf for normal distribution
+(partial = g(xbar*beta)*beta)
+```
+
+#### d)
+
+```{r}
+# We'll use the margins package which has similar functionality to stata's margins command
+margins(probit, data = df, variables = c("Client_Age"))
+```
+
+#### e)
+
+```{r}
+# Calculate partial effects
+partial_means = sapply(1:nrow(df), function(i){
+  # Plug into pdf
+  out = g(df$Client_Age[i])%*%beta
+})
+
+# the row means of the above object are the mean of partial effects
+(means = mean(partial_means))
+```
+
+#### f)
+
+```{r}
+numerical_means = sapply(1:nrow(df), function(i){
+  # Caclculate numerical derivative for each observation
+  (dnorm((df$Client_Age[i]+.001)*beta) - dnorm(df$Client_Age[i]*beta))/.001
+})
+
+mean(numerical_means)
+```
+
+
+
+
+
+
+
+
+
+
+
+
