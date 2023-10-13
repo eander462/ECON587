@@ -2,7 +2,9 @@
 title: "HW2"
 author: "Erik Andersen"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -14,7 +16,7 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ```{r}
 # Load packages
-pacman::p_load(tidyverse, haven, here, fixest, magrittr, margins)
+pacman::p_load(tidyverse, haven, here, fixest, magrittr, margins, glmx)
 
 # load data
 df = read_dta(here("data", "Econ587_Field2010_data.dta"))
@@ -80,6 +82,9 @@ summary(robust_weighted)
 interact = field_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat + Client_Age*muslim,.)
 
 summary(interact)
+
+# Calculate average partial effect of age 
+(sum(field_df$muslim)/nrow(field_df))*(coefficients(interact)[3]+coefficients(interact)[10])+(1-sum(field_df$muslim)/nrow(field_df))*coefficients(interact)[3]
 ```
 
 ### Question 2)
@@ -102,9 +107,12 @@ summary(probit)
 # We already have the predicted values stored as the fitted values in the two regression objects
 logit_predict = logit$fitted.values
 probit_predict = probit$fitted.values
+lmp_predict = robust$fitted.values
 
 # Get the correlation
 cor(logit_predict, probit_predict) # Almost exactly perfectly correlated
+cor(logit_predict, lmp_predict)
+cor(probit_predict, lmp_predict)
 
 ```
 
@@ -149,12 +157,146 @@ partial_means = sapply(1:nrow(df), function(i){
 
 ```{r}
 numerical_means = sapply(1:nrow(df), function(i){
-  # Caclculate numerical derivative for each observation
-  (dnorm((df$Client_Age[i]+.001)*beta) - dnorm(df$Client_Age[i]*beta))/.001
+  # Calculate numerical derivative for each observation
+  (dnorm((df$Client_Age[i]-.001)*beta) - dnorm(df$Client_Age[i]*beta))/.001
 })
 
 mean(numerical_means)
 ```
+
+### Question 3
+
+#### a)
+
+```{r}
+# Get fitted values from lmp
+fitted_lpm = robust$fitted.values
+
+# round to 0/1 based on 0.5 cutoff
+predictions = round(fitted_lpm)
+
+# To compare what is correct, we need to see where the prediction and the true outcome match. To do that, we need to compare predictions to df$taken_new. unfortunately, there is some missing data, so those aren't the same length. This code fixes that.
+vars_df = df |> select(taken_new, Treated, Client_Age, Client_Married, Client_Education, HH_Size, HH_Income, muslim, Hindu_SC_Kat)
+complete = complete.cases(vars_df)
+vars_df = vars_df[complete,]
+
+# now we can see when the prediction was correct
+sum(vars_df$taken_new == predictions)/length(predictions) # We predict no one accepts the lone, so this number is just the proportion who don't take up the loan. Not a good predictor
+
+# Now we change the cutoff value to the mean of the loans ~0.16
+predictions = fitted_lpm |> as_tibble() |>
+  mutate(out = if_else(fitted_lpm<mean(vars_df$taken_new),0,1))
+
+# Compare to true values
+sum(vars_df$taken_new == predictions$out)/length(predictions$out) # 0.52
+
+```
+
+#### b)
+
+```{r}
+# Get fitted values from probit
+fitted_probit = probit$fitted.values
+
+# Round baed on 0.5 cutoff
+predictions = round(fitted_probit)
+
+# Compute prediction percentage
+sum(vars_df$taken_new == predictions)/length(predictions) # Again we predict no one takes up loan
+
+# Round based on new cutoff
+predictions = fitted_probit |> as_tibble() |> 
+  mutate(out = if_else(fitted_probit<mean(vars_df$taken_new),0,1))
+
+# Compare to true values
+sum(vars_df$taken_new == predictions$out)/length(predictions$out) # ~0.54
+```
+
+#### c)
+
+```{r}
+# Filter such that imidlineid < 1400
+df_1 = df |>  filter(imidlineid < 1400)
+
+# Do the same thing to get only complete cases
+vars_df1 = df_1 |> select(taken_new, Treated, Client_Age, Client_Married, Client_Education, HH_Size, HH_Income, muslim, Hindu_SC_Kat)
+complete = complete.cases(vars_df1)
+vars_df1 = vars_df1[complete,]
+
+# Rerun probit
+probit_reduced = df_1 %>% glm(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat,., family = binomial(link = 'probit'))
+summary(probit_reduced)
+
+# round output for 0.5
+predictions = round(probit_reduced$fitted.values)
+
+# Compute prediction percentage
+sum(vars_df1$taken_new == predictions)/length(predictions)
+
+# Round for cutoff at mean
+predictions = probit_reduced$fitted.values |> as_tibble() |> 
+  mutate(out = if_else(probit_reduced$fitted.values<mean(vars_df$taken_new),0,1))
+
+# Compute percentage correct
+sum(vars_df1$taken_new == predictions$out)/length(predictions$out) # ~0.54
+```
+
+### Question 4)
+
+#### a)
+
+```{r}
+# Reestimate the lmp model
+lmp_reg = vars_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,.)
+
+# Add residuals to the dataset
+vars_df = vars_df |> mutate(lmp_resid = lmp_reg$residuals)
+
+# Regress the residuals on the covariates from the original regression
+resid_reg = vars_df %>% lm(lmp_resid ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,.)
+summary(resid_reg)
+```
+
+#### b)
+
+
+```{r}
+# Now the same thing for squared residuals
+vars_df = vars_df |> mutate(lmp_residsq = lmp_resid^2)
+
+resid_regsq = vars_df %>% lm(lmp_residsq ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,.)
+summary(resid_regsq)
+```
+
+#### c)
+
+```{r}
+# Now fit a heteroskadastic probit model using glmx package
+hetprobit = df %>% hetglm(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat,., family = binomial(link = 'probit'))
+summary(hetprobit)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
