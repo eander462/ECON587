@@ -22,14 +22,16 @@ pacman::p_load(tidyverse, haven, here, fixest, magrittr, margins, glmx)
 df = read_dta(here("data", "Econ587_Field2010_data.dta"))
 
 # Subset the data to only the rows that have values for our variable of interest
-field_df = df |> filter(!is.na(HH_Income))
+vars_df = df |> select(taken_new, Treated, Client_Age, Client_Married, Client_Education, HH_Size, HH_Income, muslim, Hindu_SC_Kat)
+complete = complete.cases(vars_df)
+vars_df = vars_df[complete,]
 ```
 
 #### a)
 
 ```{r}
 # Estimate linear prob model
-non_robust = field_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,.)
+non_robust = vars_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,.)
 
 summary(non_robust)
 ```
@@ -38,7 +40,7 @@ summary(non_robust)
 
 ```{r}
 # Reestimate but with robust se's
-robust = field_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,., vcov = "hetero")
+robust = vars_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,., vcov = "hetero")
 
 summary(robust)
 
@@ -68,10 +70,10 @@ non_weights = 1 / lm(abs(non_robust$residuals) ~ non_robust$fitted.values)$fitte
 weights = 1 / lm(abs(robust$residuals) ~ robust$fitted.values)$fitted.values^2
 
 
-non_robust_weighted = field_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,., weights = non_weights)
+non_robust_weighted = vars_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,., weights = non_weights)
 summary(non_robust_weighted)
 
-robust_weighted = field_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,., vcov = "hetero", weights = weights)
+robust_weighted = vars_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat ,., vcov = "hetero", weights = weights)
 summary(robust_weighted)
 ```
 
@@ -79,12 +81,12 @@ summary(robust_weighted)
 
 ```{r}
 # Add interaction between age and Muslim. 
-interact = field_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat + Client_Age*muslim,.)
+interact = vars_df %>% feols(taken_new ~ Treated + Client_Age + Client_Married + Client_Education + HH_Size + HH_Income + muslim + Hindu_SC_Kat + Client_Age*muslim,.)
 
 summary(interact)
 
 # Calculate average partial effect of age 
-(sum(field_df$muslim)/nrow(field_df))*(coefficients(interact)[3]+coefficients(interact)[10])+(1-sum(field_df$muslim)/nrow(field_df))*coefficients(interact)[3]
+(sum(vars_df$muslim)/nrow(vars_df))*(coefficients(interact)[3]+coefficients(interact)[10])+(1-sum(vars_df$muslim)/nrow(vars_df))*coefficients(interact)[3]
 ```
 
 ### Question 2)
