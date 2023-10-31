@@ -9,3 +9,11 @@ stringr
 forcats
 lubridate
 here
+haven
+fixest
+estimatr
+magrittr
+sandwich
+gmm
+ivmodel
+ivreg

@@ -3,23 +3,26 @@ title: "HW3"
 author: "Erik Andersen"
 date: "`r Sys.Date()`"
 output: 
+  pdf_document:
+    toc: true
   html_document:
     toc: true
     toc_float: true
     toc_depth: 5
     keep_md: yes
-  pdf_document:
-    toc: true
   always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+options(digits = 3)
 ```
 
 ```{r}
 # Load packages
-pacman::p_load(tidyverse, here)
+pacman::p_load(tidyverse, here, haven, estimatr, magrittr,ivreg, gmm, ivmodel)
+
+dr_here()
 ```
 
 ### Question 1
@@ -232,16 +235,137 @@ se_iv = delist(measurment_error2, 5)
 mean(se_iv)
 ```
 
+### Question 2
 
+```{r}
+# Load data
+din_df = read_dta(here('HW3', 'data', 'dinkelman_aer2011_Econ587.dta'))
 
+# String of controls
+controls = c("kms_to_subs0", "baseline_hhdens0", "base_hhpovrate0", "prop_head_f_a0", "sexratio0_a", "prop_indianwhite0", "kms_to_road0", "kms_to_town0", "prop_matric_m0", "prop_matric_f0", "d_prop_waterclose", "d_prop_flush", paste("idcc", 1:9, sep = ""))
 
+# Function to make a formula from our string and anything else
+formula_generator = function(y, x, controls){
+  lhs = paste(y, "~")
+  x = paste(x, collapse = " + ")
+  controls = paste(controls, collapse = " + ")
+  rhs = ifelse(is.null(x),
+               controls,
+               paste(x, controls, sep = " + "))
+  
+  formula = paste(lhs, rhs, sep = " ") 
+  
+  return(formula)
+}
+```
 
+#### a)
 
+```{r}
+# Generate our formula
+form_ols = formula_generator("d_prop_emp_f", "T", controls) |> as.formula()
 
+# Naive ols estimation
+(ols = lm_robust(form_ols, din_df, clusters = placecode0))
+```
 
+#### b)
 
+```{r}
+form_first = formula_generator('T', "mean_grad_new", controls) |> as.formula()
 
+(first_stage = lm_robust(form_first, din_df, clusters = placecode0))
+```
 
+#### c)
+
+```{r}
+first_stage$fstatistic[1]
+
+# Pvalue
+pf(first_stage$fstatistic[1], first_stage$fstatistic[2], first_stage$fstatistic[3], lower.tail = FALSE)
+```
+
+#### d)
+
+```{r}
+# Extract t statistic
+coefs = tidy(first_stage)[2,c(2:3,5)]
+
+# Calculate t stat and square it
+(f = (coefs[1]/coefs[2])^2)
+
+# P-value
+coefs[3]
+```
+
+#### e)
+
+```{r}
+# Get fitted values from first stage
+t_hat = fitted.values(first_stage)
+
+# Re-estimate part 1 with fitted t
+form_second = formula_generator("d_prop_emp_f", "T_hat", controls) |> as.formula()
+
+din_df %<>% mutate(T_hat = t_hat)
+
+(second_stage = lm_robust(form_second, din_df, clusters = placecode0))
+```
+
+#### g)
+
+```{r}
+# the function takes a different type of object than lm, so I can't use my fancy formula generator :(
+ivreg(d_prop_emp_f ~ T +kms_to_subs0 + baseline_hhdens0 + base_hhpovrate0 + prop_head_f_a0 + sexratio0_a + prop_indianwhite0 + kms_to_road0 + kms_to_town0 + prop_matric_m0 + prop_matric_f0 + d_prop_waterclose + d_prop_flush + idcc1 + idcc2 + idcc3 + idcc4 + idcc5 + idcc6 + idcc7 + idcc8 + idcc9 | mean_grad_new + kms_to_subs0 + baseline_hhdens0 + base_hhpovrate0 + prop_head_f_a0 + sexratio0_a + prop_indianwhite0 + kms_to_road0 + kms_to_town0 + prop_matric_m0 + prop_matric_f0 + d_prop_waterclose + d_prop_flush + idcc1 + idcc2 + idcc3 + idcc4 + idcc5 + idcc6 + idcc7 + idcc8 + idcc9, data = din_df, method = 'OLS')
+```
+
+#### h)
+
+```{r}
+# generated reduced form formula
+form_reduced = formula_generator('d_prop_emp_f', 'mean_grad_new', controls)
+
+# Run regression
+(reduced_reg = lm(form_reduced, din_df))
+```
+
+#### i)
+
+```{r}
+# Wald estimator: reduced form coefficient/first stage coefficient
+reduced_reg$coefficients[2]/first_stage$coefficients[2]
+```
+
+#### j)
+
+```{r}
+# Gmm estimator
+(gmm_est = gmm(d_prop_emp_f ~ T +kms_to_subs0 + baseline_hhdens0 + base_hhpovrate0 + prop_head_f_a0 + sexratio0_a + prop_indianwhite0 + kms_to_road0 + kms_to_town0 + prop_matric_m0 + prop_matric_f0 + d_prop_waterclose + d_prop_flush + idcc1 + idcc2 + idcc3 + idcc4 + idcc5 + idcc6 + idcc7 + idcc8 + idcc9, ~ mean_grad_new + kms_to_subs0 + baseline_hhdens0 + base_hhpovrate0 + prop_head_f_a0 + sexratio0_a + prop_indianwhite0 + kms_to_road0 + kms_to_town0 + prop_matric_m0 + prop_matric_f0 + d_prop_waterclose + d_prop_flush + idcc1 + idcc2 + idcc3 + idcc4 + idcc5 + idcc6 + idcc7 + idcc8 + idcc9, data = din_df))
+
+# SE
+gmm_est$vcov |> diag() |> sqrt()
+
+# LIML estimator
+# Make an ivmodel object 
+form_liml = with(din_df, ivmodel(Y=as.numeric(d_prop_emp_f), D = as.numeric(T), Z = as.numeric(mean_grad_new), X = as.matrix(din_df[controls])))
+
+# Run LIML
+liml = LIML(form_liml)
+
+# Point estimate and se
+liml$point.est
+liml$std.err
+```
+
+#### k)
+
+```{r}
+# We already calculated the fitted values from the first stage and added them to din_df as t_hat
+form_exog = formula_generator("d_prop_emp_f", c("T", "t_hat"), controls) |> as.formula()
+
+(exog = lm_robust(form_exog, din_df, cluster = placecode0))
+```
 
 
 
