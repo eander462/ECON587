@@ -3,19 +3,18 @@ title: "HW3"
 author: "Erik Andersen"
 date: "`r Sys.Date()`"
 output: 
-  pdf_document:
-    toc: true
   html_document:
     toc: true
     toc_float: true
     toc_depth: 5
     keep_md: yes
+  pdf_document:
+    toc: true
   always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
-options(digits = 3)
 ```
 
 ```{r}
@@ -229,6 +228,7 @@ mean(se)
 coefs_iv = delist(measurment_error2, 4)
 
 rowMeans(coefs_iv)
+apply(coefs_iv, 1, var)
 
 # Calculate average se's from ivreg
 se_iv = delist(measurment_error2, 5)
@@ -237,7 +237,7 @@ mean(se_iv)
 
 ### Question 2
 
-```{r}
+```{r setup2}
 # Load data
 din_df = read_dta(here('HW3', 'data', 'dinkelman_aer2011_Econ587.dta'))
 
@@ -261,7 +261,7 @@ formula_generator = function(y, x, controls){
 
 #### a)
 
-```{r}
+```{r, dependson='setup2'}
 # Generate our formula
 form_ols = formula_generator("d_prop_emp_f", "T", controls) |> as.formula()
 
@@ -271,7 +271,7 @@ form_ols = formula_generator("d_prop_emp_f", "T", controls) |> as.formula()
 
 #### b)
 
-```{r}
+```{r, dependson='setup2'}
 form_first = formula_generator('T', "mean_grad_new", controls) |> as.formula()
 
 (first_stage = lm_robust(form_first, din_df, clusters = placecode0))
@@ -301,7 +301,7 @@ coefs[3]
 
 #### e)
 
-```{r}
+```{r, dependson='setup2'}
 # Get fitted values from first stage
 t_hat = fitted.values(first_stage)
 
@@ -317,12 +317,14 @@ din_df %<>% mutate(T_hat = t_hat)
 
 ```{r}
 # the function takes a different type of object than lm, so I can't use my fancy formula generator :(
-ivreg(d_prop_emp_f ~ T +kms_to_subs0 + baseline_hhdens0 + base_hhpovrate0 + prop_head_f_a0 + sexratio0_a + prop_indianwhite0 + kms_to_road0 + kms_to_town0 + prop_matric_m0 + prop_matric_f0 + d_prop_waterclose + d_prop_flush + idcc1 + idcc2 + idcc3 + idcc4 + idcc5 + idcc6 + idcc7 + idcc8 + idcc9 | mean_grad_new + kms_to_subs0 + baseline_hhdens0 + base_hhpovrate0 + prop_head_f_a0 + sexratio0_a + prop_indianwhite0 + kms_to_road0 + kms_to_town0 + prop_matric_m0 + prop_matric_f0 + d_prop_waterclose + d_prop_flush + idcc1 + idcc2 + idcc3 + idcc4 + idcc5 + idcc6 + idcc7 + idcc8 + idcc9, data = din_df, method = 'OLS')
+iv_reg = ivreg(d_prop_emp_f ~ T +kms_to_subs0 + baseline_hhdens0 + base_hhpovrate0 + prop_head_f_a0 + sexratio0_a + prop_indianwhite0 + kms_to_road0 + kms_to_town0 + prop_matric_m0 + prop_matric_f0 + d_prop_waterclose + d_prop_flush + idcc1 + idcc2 + idcc3 + idcc4 + idcc5 + idcc6 + idcc7 + idcc8 + idcc9 | mean_grad_new + kms_to_subs0 + baseline_hhdens0 + base_hhpovrate0 + prop_head_f_a0 + sexratio0_a + prop_indianwhite0 + kms_to_road0 + kms_to_town0 + prop_matric_m0 + prop_matric_f0 + d_prop_waterclose + d_prop_flush + idcc1 + idcc2 + idcc3 + idcc4 + idcc5 + idcc6 + idcc7 + idcc8 + idcc9, data = din_df, method = 'OLS')
+
+summary(iv_reg)
 ```
 
 #### h)
 
-```{r}
+```{r, dependson='setup2'}
 # generated reduced form formula
 form_reduced = formula_generator('d_prop_emp_f', 'mean_grad_new', controls)
 
@@ -360,9 +362,12 @@ liml$std.err
 
 #### k)
 
-```{r}
+```{r, dependson='setup2'}
+# Add residuals to data
+din_df %<>% mutate(resids = din_df$`T` - t_hat)
+
 # We already calculated the fitted values from the first stage and added them to din_df as t_hat
-form_exog = formula_generator("d_prop_emp_f", c("T", "t_hat"), controls) |> as.formula()
+form_exog = formula_generator("d_prop_emp_f", c("T", "resids"), controls) |> as.formula()
 
 (exog = lm_robust(form_exog, din_df, cluster = placecode0))
 ```

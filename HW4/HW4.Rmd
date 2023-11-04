@@ -1,0 +1,127 @@
+---
+title: "HW4"
+author: "Erik Andersen"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE)
+```
+
+```{r}
+here::i_am("HW4/HW4.Rmd")
+
+# Load packages
+pacman::p_load(tidyverse, magrittr, estimatr, fixest, haven)
+```
+
+```{r}
+# Load data
+election_df = read_dta(here::here("HW4", "data", "GriffithNoonen2022_Econ587.dta"))
+```
+
+### Question 1
+
+#### a)
+
+```{r}
+# Generate treatment dummy and city/cycle pair for clustering
+election_df %<>% mutate(post = if_else(cycle >= 2017, 1, 0), 
+                        treatment = if_else(city == 'Seattle', 1, 0),
+                        city_cycle = as.factor(city):as.factor(cycle),
+                        seattle = if_else(city == 'Seattle', 1, 0))
+
+# Run naive regression
+election_df %>% lm_robust(candidates_ballot ~ treatment + At_Large*Special,., clusters = city_cycle)
+```
+
+#### b)
+
+```{r}
+# Before and after treatment for seattle
+(before_after_seattle = election_df |> filter(city == 'Seattle') %>%
+  lm_robust(candidates_ballot ~ post + At_Large*Special,., clusters = city_cycle))
+
+# Before and after for non-seattle cities
+(before_after_other = election_df |> filter(city != 'Seattle') %>%
+  lm_robust(candidates_ballot ~ post + At_Large*Special,., clusters = city_cycle))
+
+# Diff between
+summary(before_after_seattle)$coefficients[2,1] - summary(before_after_other)$coefficients[2,1]
+```
+
+#### c)
+
+```{r}
+# Cross sectional estimate before 2017
+(cross_before = election_df |> filter(post == 0) %>%
+  lm_robust(candidates_ballot ~ seattle + At_Large*Special,., clusters = city_cycle))
+
+# Cross-Sectional Estimate after 2017
+(cross_after = election_df |> filter(post == 1) %>%
+  lm_robust(candidates_ballot ~ seattle + At_Large*Special,., clusters = city_cycle))
+
+# Diff between
+summary(cross_after)$coefficients[2,1] - summary(cross_before)$coefficients[2,1]
+```
+
+
+#### d)
+
+```{r}
+# Diff-in-Diff
+election_df %>% lm_robust(candidates_ballot ~ post*treatment + At_Large*Special,., clusters = city_cycle) # 2.8
+```
+
+#### e)
+
+```{r}
+# two way fixed effects. We're switching regression functions here because it has prettier output, and seems to calculate standard errors in a slightly different way that matches the paper
+election_df %>% feols(candidates_ballot ~ post*treatment | as.factor(city) + as.factor(cycle) + At_Large*Special,., cluster = "city_cycle") # Point estimate and se match
+
+# Extract
+```
+
+#### f)
+
+```{r}
+# Test for parallel pre-trends with city fixed effects
+election_df |> filter(post == 0 ) %>%
+  feols(candidates_ballot ~ cycle*seattle + At_Large*Special | city,., clusters = "city_cycle")
+
+# Without city fixed effects
+election_df |> filter(post == 0 ) %>%
+  lm_robust(candidates_ballot ~ cycle*seattle + At_Large*Special,., clusters = city_cycle)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
