@@ -24,6 +24,8 @@ election_df = read_dta(here::here("HW4", "data", "GriffithNoonen2022_Econ587.dta
 
 ### Question 1
 
+Note: lm_robust and feols seem to calculate clustered standard errors differently. Feols matches those from the paper, but I've use both based on convenience and when I don't have a standard error to match I defer to lm_robust. 
+
 #### a)
 
 ```{r}
@@ -73,6 +75,8 @@ summary(cross_after)$coefficients[2,1] - summary(cross_before)$coefficients[2,1]
 ```{r}
 # Diff-in-Diff
 election_df %>% lm_robust(candidates_ballot ~ post*treatment + At_Large*Special,., clusters = city_cycle) # 2.8
+
+# Coeff of interest is post:treatment
 ```
 
 #### e)
@@ -81,22 +85,49 @@ election_df %>% lm_robust(candidates_ballot ~ post*treatment + At_Large*Special,
 # two way fixed effects. We're switching regression functions here because it has prettier output, and seems to calculate standard errors in a slightly different way that matches the paper
 election_df %>% feols(candidates_ballot ~ post*treatment | as.factor(city) + as.factor(cycle) + At_Large*Special,., cluster = "city_cycle") # Point estimate and se match
 
-# Extract
+# Coeff of interest is post:treatment
 ```
 
 #### f)
 
 ```{r}
 # Test for parallel pre-trends with city fixed effects
-election_df |> filter(post == 0 ) %>%
-  feols(candidates_ballot ~ cycle*seattle + At_Large*Special | city,., clusters = "city_cycle")
+election_df |> filter(post == 0 ) |> 
+  mutate(`cycle*seattle` = cycle*seattle) %>%
+  lm_robust(candidates_ballot ~ `cycle*seattle` + At_Large*Special + as.factor(city),., clusters = city_cycle)
 
 # Without city fixed effects
-election_df |> filter(post == 0 ) %>%
-  lm_robust(candidates_ballot ~ cycle*seattle + At_Large*Special,., clusters = city_cycle)
+election_df |> filter(post == 0 ) |> 
+  mutate(`cycle*seattle` = cycle*seattle) %>%
+  lm_robust(candidates_ballot ~ `cycle*seattle` + At_Large*Special,., clusters = city_cycle)
 ```
 
+#### g)
 
+```{r}
+# Estimate non-parallel trends test
+election_df |> mutate(`seattle*cycle` = seattle*cycle, `seattle*post` = seattle*post) %>%
+  feols(candidates_ballot ~ cycle +  `seattle*cycle` + `seattle*post` + At_Large*Special + as.factor(city),., cluster = "city_cycle")
+
+# Coef of interest is seattle*post
+```
+
+#### h)
+
+```{r}
+# Define cities in washington
+washington = c('Bellevue', 'Everett', 'Seattle', 'Spokane', 'Tacome', 'Vancouver')
+
+# Run part g again but only with cities in washington
+election_df |> filter(city %in% washington) |> 
+  mutate(`seattle*cycle` = seattle*cycle, `seattle*post` = seattle*post) %>%
+  feols(candidates_ballot ~ cycle +  `seattle*cycle` + `seattle*post` + At_Large*Special + as.factor(city),., cluster = "city_cycle")
+
+# Now just with california cities
+election_df |> filter((!city %in% washington) | city == 'Seattle') |> 
+  mutate(`seattle*cycle` = seattle*cycle, `seattle*post` = seattle*post) %>%
+  feols(candidates_ballot ~ cycle +  `seattle*cycle` + `seattle*post` + At_Large*Special + as.factor(city),., cluster = "city_cycle")
+```
 
 
 
