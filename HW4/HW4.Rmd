@@ -228,12 +228,14 @@ balanced_df = election_df |>
 
 ```{r synth, dependson='balance'}
 # Generate synthetic object
-all_synth = balanced_df |> synthetic_control(outcome = candidates_ballot,
-                                 unit = city,
-                                 time = cycle,
-                                 i_unit = 'Seattle',
-                                 i_time = 8) |> 
+all_synth = balanced_df |> 
+  synthetic_control(outcome = candidates_ballot,
+                    unit = city,
+                    time = cycle,
+                    i_unit = 'Seattle',
+                    i_time = 8) |> 
   # I can only use these predictors because for pretty much all other values there are some city/cycles where there are no observations which breaks this
+  
   generate_predictor(At_Large = At_Large, 
                      Special = Special,
                      Pct_general = Pct_general,
@@ -242,7 +244,9 @@ all_synth = balanced_df |> synthetic_control(outcome = candidates_ballot,
                      inc_pct_general = inc_pct_general,
                      pop = pop,
                      pop100k = pop100k) |> 
-  generate_weights() |> generate_control() 
+  
+  generate_weights() |>
+  generate_control() 
 ```
 
 ```{r, dependson="synth"}
@@ -258,10 +262,11 @@ plot_trends(all_synth)
 # Generate synthetic control for only cities in washington
 washington_synth = balanced_df |> filter(state == 'Wash') |> 
   synthetic_control(outcome = candidates_ballot,
-                                 unit = city,
-                                 time = cycle,
-                                 i_unit = 'Seattle',
-                                 i_time = 8) |> 
+                    unit = city,
+                    time = cycle,
+                    i_unit = 'Seattle',
+                    i_time = 8) |> 
+  
   generate_predictor(At_Large = At_Large, # I had to remove special because there's no variation in it for washington
                      Pct_general = Pct_general,
                      inc_run = inc_run,
@@ -269,7 +274,9 @@ washington_synth = balanced_df |> filter(state == 'Wash') |>
                      inc_pct_general = inc_pct_general,
                      pop = pop,
                      pop100k = pop100k) |> 
-  generate_weights() |> generate_control() 
+  
+  generate_weights() |> 
+  generate_control() 
 ```
 
 ```{r, dependson='synth_wash'}
@@ -284,17 +291,20 @@ plot_trends(washington_synth)
 # Generate synthetic control for only cities in washington
 california_synth = balanced_df |> filter(state == 'Calif' | city == 'Seattle') |> 
   synthetic_control(outcome = candidates_ballot,
-                                 unit = city,
-                                 time = cycle,
-                                 i_unit = 'Seattle',
-                                 i_time = 8) |> 
+                    unit = city,
+                    time = cycle,
+                    i_unit = 'Seattle',
+                    i_time = 8) |> 
+  
   generate_predictor(Pct_general = Pct_general,
                      inc_run = inc_run,
                      inc_win = inc_win,
                      inc_pct_general = inc_pct_general,
                      pop = pop,
                      pop100k = pop100k) |> 
-  generate_weights() |> generate_control() 
+  
+  generate_weights() |> 
+  generate_control() 
 ```
 
 ```{r, dependson='synth_calif'}
@@ -305,30 +315,69 @@ plot_trends(california_synth)
 
 #### f)
 
-```{r synth_placebo}
-# Drop Seattle and generate placebos
+```{r synth_placebo_graph}
+# Different approach first because its built into the package. This generates placebos and plots them
 placebos_synth = balanced_df |> 
   synthetic_control(outcome = candidates_ballot,
-                                 unit = city,
-                                 time = cycle,
-                                 i_unit = 'Seattle',
-                                 i_time = 8,
-                                 generate_placebos = T) |> 
-  generate_predictor(At_Large = At_Large, # I had to remove special because there's no variation in it for washington
+                    unit = city,
+                    time = cycle,
+                    i_unit = 'Seattle',
+                    i_time = 8,
+                    generate_placebos = T) |> 
+  
+  generate_predictor(At_Large = At_Large, 
                      Pct_general = Pct_general,
                      inc_run = inc_run,
                      inc_win = inc_win,
                      inc_pct_general = inc_pct_general,
                      pop = pop,
                      pop100k = pop100k) |> 
-  generate_weights() |> generate_control() 
+  
+  generate_weights() |> 
+  generate_control() 
 ```
 
-```{r, dependson='synth_placebo'}
+```{r, dependson='synth_placebo_graph'}
+# Plot placebo trends vs seattle trend
 plot_placebos(placebos_synth)
 ```
 
+```{r synth_placebo_weights}
+# Drop seattle and generate weights for each different city as a placebo
+noseattle_df = balanced_df |> filter(city != 'Seattle')
 
+placebo_weights = lapply(unique(noseattle_df$city),
+                         function(x) {
+                           synthetic_control(
+                             noseattle_df,
+                             outcome = candidates_ballot,
+                             unit = city,
+                             time = cycle,
+                             i_unit = x,
+                             i_time = 8
+                           ) |>
+                             generate_predictor(
+                               At_Large = At_Large,
+                               Pct_general = Pct_general,
+                               inc_run = inc_run,
+                               inc_win = inc_win,
+                               inc_pct_general = inc_pct_general,
+                               pop = pop,
+                               pop100k = pop100k
+                             ) |>
+                             generate_weights() |>
+                             generate_control()
+                         }
+)
+```
+
+```{r, dependson='synth_placebo_weights'}
+lapply(1:length(placebo_weights), function(i){
+  placebo_weights = placebo_weights[[i]]
+  plot_weights(placebo_weights)
+  grab_unit_weights(placebo_weights)
+})
+```
 
 
 

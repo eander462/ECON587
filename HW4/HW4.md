@@ -3,13 +3,13 @@ title: "HW4"
 author: "Erik Andersen"
 date: "2023-11-08"
 output: 
+  pdf_document:
+    toc: true
   html_document:
     toc: true
     toc_float: true
     toc_depth: 5
     keep_md: yes
-  pdf_document:
-    toc: true
   always_allow_html: true
 ---
 
@@ -575,12 +575,14 @@ balanced_df = election_df |>
 
 ```r
 # Generate synthetic object
-all_synth = balanced_df |> synthetic_control(outcome = candidates_ballot,
-                                 unit = city,
-                                 time = cycle,
-                                 i_unit = 'Seattle',
-                                 i_time = 8) |> 
+all_synth = balanced_df |> 
+  synthetic_control(outcome = candidates_ballot,
+                    unit = city,
+                    time = cycle,
+                    i_unit = 'Seattle',
+                    i_time = 8) |> 
   # I can only use these predictors because for pretty much all other values there are some city/cycles where there are no observations which breaks this
+  
   generate_predictor(At_Large = At_Large, 
                      Special = Special,
                      Pct_general = Pct_general,
@@ -589,7 +591,9 @@ all_synth = balanced_df |> synthetic_control(outcome = candidates_ballot,
                      inc_pct_general = inc_pct_general,
                      pop = pop,
                      pop100k = pop100k) |> 
-  generate_weights() |> generate_control() 
+  
+  generate_weights() |>
+  generate_control() 
 ```
 
 
@@ -637,10 +641,11 @@ plot_trends(all_synth)
 # Generate synthetic control for only cities in washington
 washington_synth = balanced_df |> filter(state == 'Wash') |> 
   synthetic_control(outcome = candidates_ballot,
-                                 unit = city,
-                                 time = cycle,
-                                 i_unit = 'Seattle',
-                                 i_time = 8) |> 
+                    unit = city,
+                    time = cycle,
+                    i_unit = 'Seattle',
+                    i_time = 8) |> 
+  
   generate_predictor(At_Large = At_Large, # I had to remove special because there's no variation in it for washington
                      Pct_general = Pct_general,
                      inc_run = inc_run,
@@ -648,7 +653,9 @@ washington_synth = balanced_df |> filter(state == 'Wash') |>
                      inc_pct_general = inc_pct_general,
                      pop = pop,
                      pop100k = pop100k) |> 
-  generate_weights() |> generate_control() 
+  
+  generate_weights() |> 
+  generate_control() 
 ```
 
 
@@ -687,17 +694,20 @@ plot_trends(washington_synth)
 # Generate synthetic control for only cities in washington
 california_synth = balanced_df |> filter(state == 'Calif' | city == 'Seattle') |> 
   synthetic_control(outcome = candidates_ballot,
-                                 unit = city,
-                                 time = cycle,
-                                 i_unit = 'Seattle',
-                                 i_time = 8) |> 
+                    unit = city,
+                    time = cycle,
+                    i_unit = 'Seattle',
+                    i_time = 8) |> 
+  
   generate_predictor(Pct_general = Pct_general,
                      inc_run = inc_run,
                      inc_win = inc_win,
                      inc_pct_general = inc_pct_general,
                      pop = pop,
                      pop100k = pop100k) |> 
-  generate_weights() |> generate_control() 
+  
+  generate_weights() |> 
+  generate_control() 
 ```
 
 
@@ -735,32 +745,327 @@ plot_trends(california_synth)
 
 
 ```r
-# Drop Seattle and generate placebos
+# Different approach first because its built into the package. This generates placebos and plots them
 placebos_synth = balanced_df |> 
   synthetic_control(outcome = candidates_ballot,
-                                 unit = city,
-                                 time = cycle,
-                                 i_unit = 'Seattle',
-                                 i_time = 8,
-                                 generate_placebos = T) |> 
-  generate_predictor(At_Large = At_Large, # I had to remove special because there's no variation in it for washington
+                    unit = city,
+                    time = cycle,
+                    i_unit = 'Seattle',
+                    i_time = 8,
+                    generate_placebos = T) |> 
+  
+  generate_predictor(At_Large = At_Large, 
                      Pct_general = Pct_general,
                      inc_run = inc_run,
                      inc_win = inc_win,
                      inc_pct_general = inc_pct_general,
                      pop = pop,
                      pop100k = pop100k) |> 
-  generate_weights() |> generate_control() 
+  
+  generate_weights() |> 
+  generate_control() 
 ```
 
 
 ```r
+# Plot placebo trends vs seattle trend
 plot_placebos(placebos_synth)
 ```
 
 ![](HW4_files/figure-html/unnamed-chunk-17-1.png)<!-- -->
 
 
+```r
+# Drop seattle and generate weights for each different city as a placebo
+noseattle_df = balanced_df |> filter(city != 'Seattle')
+
+placebo_weights = lapply(unique(noseattle_df$city),
+                         function(x) {
+                           synthetic_control(
+                             noseattle_df,
+                             outcome = candidates_ballot,
+                             unit = city,
+                             time = cycle,
+                             i_unit = x,
+                             i_time = 8
+                           ) |>
+                             generate_predictor(
+                               At_Large = At_Large,
+                               Pct_general = Pct_general,
+                               inc_run = inc_run,
+                               inc_win = inc_win,
+                               inc_pct_general = inc_pct_general,
+                               pop = pop,
+                               pop100k = pop100k
+                             ) |>
+                             generate_weights() |>
+                             generate_control()
+                         }
+)
+```
+
+
+```r
+lapply(1:length(placebo_weights), function(i){
+  placebo_weights = placebo_weights[[i]]
+  plot_weights(placebo_weights)
+  grab_unit_weights(placebo_weights)
+})
+```
+
+```
+## [[1]]
+## # A tibble: 13 × 2
+##    unit                weight
+##    <chr>                <dbl>
+##  1 Everett       0.927       
+##  2 Fresno        0.00000112  
+##  3 Kent          0.000000324 
+##  4 Long Beach    0.00000590  
+##  5 Los Angeles   0.00000524  
+##  6 Oakland       0.00000262  
+##  7 Sacramento    0.00000220  
+##  8 San Diego     0.000000892 
+##  9 San Francisco 0.00000239  
+## 10 San Jose      0.0000000213
+## 11 Spokane       0.000113    
+## 12 Tacoma        0.00000417  
+## 13 Vancouver     0.0731      
+## 
+## [[2]]
+## # A tibble: 13 × 2
+##    unit              weight
+##    <chr>              <dbl>
+##  1 Bellevue      0.995     
+##  2 Fresno        0.0000754 
+##  3 Kent          0.00202   
+##  4 Long Beach    0.00000532
+##  5 Los Angeles   0.0000243 
+##  6 Oakland       0.00154   
+##  7 Sacramento    0.00112   
+##  8 San Diego     0.00000757
+##  9 San Francisco 0.00000834
+## 10 San Jose      0.00000369
+## 11 Spokane       0.00000488
+## 12 Tacoma        0.0000143 
+## 13 Vancouver     0.00000566
+## 
+## [[3]]
+## # A tibble: 13 × 2
+##    unit               weight
+##    <chr>               <dbl>
+##  1 Bellevue      0.00000222 
+##  2 Everett       0.00000110 
+##  3 Kent          0.684      
+##  4 Long Beach    0.00000148 
+##  5 Los Angeles   0.0739     
+##  6 Oakland       0.000000465
+##  7 Sacramento    0.000000449
+##  8 San Diego     0.00000318 
+##  9 San Francisco 0.00000225 
+## 10 San Jose      0.0447     
+## 11 Spokane       0.00000228 
+## 12 Tacoma        0.00000353 
+## 13 Vancouver     0.197      
+## 
+## [[4]]
+## # A tibble: 13 × 2
+##    unit                 weight
+##    <chr>                 <dbl>
+##  1 Bellevue      0.00000246   
+##  2 Everett       0.0100       
+##  3 Fresno        0.139        
+##  4 Long Beach    0.000000377  
+##  5 Los Angeles   0.00000000292
+##  6 Oakland       0.0000000319 
+##  7 Sacramento    0.851        
+##  8 San Diego     0.0000000986 
+##  9 San Francisco 0.000000187  
+## 10 San Jose      0.000000172  
+## 11 Spokane       0.000000834  
+## 12 Tacoma        0.0000597    
+## 13 Vancouver     0.00000342   
+## 
+## [[5]]
+## # A tibble: 13 × 2
+##    unit                 weight
+##    <chr>                 <dbl>
+##  1 Bellevue      0.00000586   
+##  2 Everett       0.00000466   
+##  3 Fresno        0.00000352   
+##  4 Kent          0.00000249   
+##  5 Los Angeles   0.0112       
+##  6 Oakland       0.0000334    
+##  7 Sacramento    0.00000659   
+##  8 San Diego     0.0000698    
+##  9 San Francisco 0.100        
+## 10 San Jose      0.0420       
+## 11 Spokane       0.847        
+## 12 Tacoma        0.00000634   
+## 13 Vancouver     0.00000000616
+## 
+## [[6]]
+## # A tibble: 13 × 2
+##    unit            weight
+##    <chr>            <dbl>
+##  1 Bellevue      6.31e- 9
+##  2 Everett       5.66e- 9
+##  3 Fresno        2.67e- 8
+##  4 Kent          8.09e- 9
+##  5 Long Beach    1.18e-10
+##  6 Oakland       2.90e- 8
+##  7 Sacramento    1.38e- 7
+##  8 San Diego     1.00e+ 0
+##  9 San Francisco 2.37e-10
+## 10 San Jose      1.09e-11
+## 11 Spokane       2.23e-10
+## 12 Tacoma        6.00e-10
+## 13 Vancouver     1.99e-10
+## 
+## [[7]]
+## # A tibble: 13 × 2
+##    unit                weight
+##    <chr>                <dbl>
+##  1 Bellevue      0.000000457 
+##  2 Everett       0.478       
+##  3 Fresno        0.00000697  
+##  4 Kent          0.00000971  
+##  5 Long Beach    0.487       
+##  6 Los Angeles   0.0290      
+##  7 Sacramento    0.00598     
+##  8 San Diego     0.000330    
+##  9 San Francisco 0.0000671   
+## 10 San Jose      0.0000123   
+## 11 Spokane       0.0000000199
+## 12 Tacoma        0.0000170   
+## 13 Vancouver     0.00000901  
+## 
+## [[8]]
+## # A tibble: 13 × 2
+##    unit                weight
+##    <chr>                <dbl>
+##  1 Bellevue      0.0000000982
+##  2 Everett       0.0000000247
+##  3 Fresno        0.0000178   
+##  4 Kent          0.732       
+##  5 Long Beach    0.0000361   
+##  6 Los Angeles   0.0808      
+##  7 Oakland       0.187       
+##  8 San Diego     0.0000385   
+##  9 San Francisco 0.0000362   
+## 10 San Jose      0.0000189   
+## 11 Spokane       0.00000904  
+## 12 Tacoma        0.0000300   
+## 13 Vancouver     0.0000204   
+## 
+## [[9]]
+## # A tibble: 13 × 2
+##    unit                 weight
+##    <chr>                 <dbl>
+##  1 Bellevue      0.000000141  
+##  2 Everett       0.380        
+##  3 Fresno        0.000000577  
+##  4 Kent          0.000000448  
+##  5 Long Beach    0.00000000214
+##  6 Los Angeles   0.00000483   
+##  7 Oakland       0.00000000855
+##  8 Sacramento    0.000000480  
+##  9 San Francisco 0.620        
+## 10 San Jose      0.00000167   
+## 11 Spokane       0.000000156  
+## 12 Tacoma        0.000000567  
+## 13 Vancouver     0.000000500  
+## 
+## [[10]]
+## # A tibble: 13 × 2
+##    unit          weight
+##    <chr>          <dbl>
+##  1 Bellevue    0.000766
+##  2 Everett     0.000371
+##  3 Fresno      0.000636
+##  4 Kent        0.000582
+##  5 Long Beach  0.111   
+##  6 Los Angeles 0.0200  
+##  7 Oakland     0.253   
+##  8 Sacramento  0.000793
+##  9 San Diego   0.00213 
+## 10 San Jose    0.606   
+## 11 Spokane     0.00228 
+## 12 Tacoma      0.000979
+## 13 Vancouver   0.000901
+## 
+## [[11]]
+## # A tibble: 13 × 2
+##    unit               weight
+##    <chr>               <dbl>
+##  1 Bellevue      0.000000987
+##  2 Everett       0.000000657
+##  3 Fresno        0.00000153 
+##  4 Kent          0.000000514
+##  5 Long Beach    0.0000735  
+##  6 Los Angeles   0.0426     
+##  7 Oakland       0.000000169
+##  8 Sacramento    0.000000442
+##  9 San Diego     0.000965   
+## 10 San Francisco 0.954      
+## 11 Spokane       0.00000600 
+## 12 Tacoma        0.00000304 
+## 13 Vancouver     0.00201    
+## 
+## [[12]]
+## # A tibble: 13 × 2
+##    unit               weight
+##    <chr>               <dbl>
+##  1 Bellevue      0.152      
+##  2 Everett       0.0000108  
+##  3 Fresno        0.000000859
+##  4 Kent          0.000000197
+##  5 Long Beach    0.660      
+##  6 Los Angeles   0.00000120 
+##  7 Oakland       0.000000461
+##  8 Sacramento    0.000000535
+##  9 San Diego     0.0000185  
+## 10 San Francisco 0.0000142  
+## 11 San Jose      0.0263     
+## 12 Tacoma        0.00000221 
+## 13 Vancouver     0.161      
+## 
+## [[13]]
+## # A tibble: 13 × 2
+##    unit            weight
+##    <chr>            <dbl>
+##  1 Bellevue      0.000919
+##  2 Everett       0.000854
+##  3 Fresno        0.00141 
+##  4 Kent          0.347   
+##  5 Long Beach    0.416   
+##  6 Los Angeles   0.000424
+##  7 Oakland       0.00253 
+##  8 Sacramento    0.00142 
+##  9 San Diego     0.00201 
+## 10 San Francisco 0.00273 
+## 11 San Jose      0.000110
+## 12 Spokane       0.00195 
+## 13 Vancouver     0.222   
+## 
+## [[14]]
+## # A tibble: 13 × 2
+##    unit                weight
+##    <chr>                <dbl>
+##  1 Bellevue      0.0000000688
+##  2 Everett       0.0000000547
+##  3 Fresno        0.000000153 
+##  4 Kent          0.000000115 
+##  5 Long Beach    0.0612      
+##  6 Los Angeles   0.0000000400
+##  7 Oakland       0.0000000612
+##  8 Sacramento    0.0000000814
+##  9 San Diego     0.000000121 
+## 10 San Francisco 0.000000157 
+## 11 San Jose      0.00000387  
+## 12 Spokane       0.939       
+## 13 Tacoma        0.000000250
+```
 
 
 
