@@ -3,13 +3,13 @@ title: "HW4"
 author: "Erik Andersen"
 date: "`r Sys.Date()`"
 output: 
+  pdf_document:
+    toc: true
   html_document:
     toc: true
     toc_float: true
     toc_depth: 5
     keep_md: yes
-  pdf_document:
-    toc: true
   always_allow_html: true
 ---
 
@@ -51,7 +51,7 @@ election_df %>% lm_robust(candidates_ballot ~ treatment + At_Large*Special,., cl
 
 #### b)
 
-```{r}
+```{r, dependson='data'}
 # Before and after treatment for seattle
 (before_after_seattle = election_df |> filter(city == 'Seattle') %>%
   lm_robust(candidates_ballot ~ post + At_Large*Special,., clusters = city_cycle))
@@ -66,7 +66,7 @@ summary(before_after_seattle)$coefficients[2,1] - summary(before_after_other)$co
 
 #### c)
 
-```{r}
+```{r, dependson='data'}
 # Cross sectional estimate before 2017
 (cross_before = election_df |> filter(post == 0) %>%
   lm_robust(candidates_ballot ~ seattle + At_Large*Special,., clusters = city_cycle))
@@ -83,7 +83,7 @@ summary(cross_after)$coefficients[2,1] - summary(cross_before)$coefficients[2,1]
 
 #### d)
 
-```{r}
+```{r, dependson='data'}
 # Diff-in-Diff
 (diff_in_diff = election_df %>% lm_robust(candidates_ballot ~ post*treatment + At_Large*Special,., clusters = city_cycle)) # 2.8
 
@@ -92,7 +92,7 @@ summary(cross_after)$coefficients[2,1] - summary(cross_before)$coefficients[2,1]
 
 #### e)
 
-```{r}
+```{r, dependson='data'}
 # two way fixed effects. We're switching regression functions here because it has prettier output, and seems to calculate standard errors in a slightly different way that matches the paper
 (two_way = election_df %>% feols(candidates_ballot ~ post*treatment | as.factor(city) + as.factor(cycle) + At_Large*Special,., cluster = "city_cycle"))# Point estimate and se match
 
@@ -101,7 +101,7 @@ summary(cross_after)$coefficients[2,1] - summary(cross_before)$coefficients[2,1]
 
 #### f)
 
-```{r}
+```{r, dependson='data'}
 # Test for parallel pre-trends with city fixed effects
 election_df |> filter(post == 0 ) |> 
   mutate(`cycle*seattle` = cycle*seattle) %>%
@@ -115,7 +115,7 @@ election_df |> filter(post == 0 ) |>
 
 #### g)
 
-```{r}
+```{r, dependson='data'}
 # Estimate non-parallel trends test
 election_df |> mutate(`seattle*cycle` = seattle*cycle, `seattle*post` = seattle*post) %>%
   feols(candidates_ballot ~ cycle +  `seattle*cycle` + `seattle*post` + At_Large*Special + as.factor(city),., cluster = "city_cycle")
@@ -125,7 +125,7 @@ election_df |> mutate(`seattle*cycle` = seattle*cycle, `seattle*post` = seattle*
 
 #### h)
 
-```{r}
+```{r, dependson='data'}
 # Run part g again but only with cities in washington
 election_df |> filter(state == 'Wash') |> 
   mutate(`seattle*cycle` = seattle*cycle, `seattle*post` = seattle*post) %>%
@@ -184,7 +184,7 @@ plm::phtest(diff_in_diff_plm, two_way_plm)
 
 ### Question 3
 
-```{r}
+```{r balance}
 # Collapse by city_cycle 
 balanced_df = election_df |> 
   mutate(cycle = factor(election_df$cycle, labels = 1:10), # Renumber cycles 1 through 10
@@ -205,32 +205,36 @@ balanced_df = election_df |>
             total_Less200 = mean(total_Less200, na.rm = T),
             donors_Less200  = mean(donors_Less200, na.rm = T),
             pop = mean(pop, na.rm = T),
-            pop100k = mean(pop100k, na.rm = T)) |> 
+            pop100k = mean(pop100k, na.rm = T),
+            state = unique(state)) |> 
   mutate(city = stringr::word(city_cycle, sep = ":"),
-         cycle = stringr::word(city_cycle, start = -1, sep = ":"))
+         cycle = as.numeric(stringr::word(city_cycle, start = -1, sep = ":")))
+
 ```
 
 #### a)
 
-```{r}
+```{r, dependson='balance'}
 (balanced_dd = balanced_df %>% lm_robust(candidates_ballot ~ post*treatment + At_Large*Special,., clusters = city_cycle)) # 3.1
 ```
 
 #### b)
 
-```{r}
+```{r, dependson='balance'}
 (balanced_two = balanced_df %>% feols(candidates_ballot ~ post*treatment | as.factor(city) + as.factor(cycle) + At_Large*Special,., cluster = "city_cycle"))
 ```
 
 #### c)
 
-```{r}
-balanced_df |> synthetic_control(outcome = candidates_ballot,
+```{r synth, dependson='balance'}
+# Generate synthetic object
+all_synth = balanced_df |> synthetic_control(outcome = candidates_ballot,
                                  unit = city,
                                  time = cycle,
                                  i_unit = 'Seattle',
                                  i_time = 8) |> 
-  generate_predictor(At_Large = At_Large,
+  # I can only use these predictors because for pretty much all other values there are some city/cycles where there are no observations which breaks this
+  generate_predictor(At_Large = At_Large, 
                      Special = Special,
                      Pct_general = Pct_general,
                      inc_run = inc_run,
@@ -238,14 +242,91 @@ balanced_df |> synthetic_control(outcome = candidates_ballot,
                      inc_pct_general = inc_pct_general,
                      pop = pop,
                      pop100k = pop100k) |> 
-  generate_weights() |> generate_control() |> plot_weights()
+  generate_weights() |> generate_control() 
+```
+
+```{r, dependson="synth"}
+plot_weights(all_synth)
+grab_unit_weights(all_synth) |> arrange(desc(weight))
+plot_trends(all_synth)
 ```
 
 
+#### d)
 
+```{r synth_wash}
+# Generate synthetic control for only cities in washington
+washington_synth = balanced_df |> filter(state == 'Wash') |> 
+  synthetic_control(outcome = candidates_ballot,
+                                 unit = city,
+                                 time = cycle,
+                                 i_unit = 'Seattle',
+                                 i_time = 8) |> 
+  generate_predictor(At_Large = At_Large, # I had to remove special because there's no variation in it for washington
+                     Pct_general = Pct_general,
+                     inc_run = inc_run,
+                     inc_win = inc_win,
+                     inc_pct_general = inc_pct_general,
+                     pop = pop,
+                     pop100k = pop100k) |> 
+  generate_weights() |> generate_control() 
+```
 
+```{r, dependson='synth_wash'}
+plot_weights(washington_synth)
+grab_unit_weights(washington_synth) |> arrange(desc(weight))
+plot_trends(washington_synth)
+```
 
+#### e)
 
+```{r synth_calif}
+# Generate synthetic control for only cities in washington
+california_synth = balanced_df |> filter(state == 'Calif' | city == 'Seattle') |> 
+  synthetic_control(outcome = candidates_ballot,
+                                 unit = city,
+                                 time = cycle,
+                                 i_unit = 'Seattle',
+                                 i_time = 8) |> 
+  generate_predictor(Pct_general = Pct_general,
+                     inc_run = inc_run,
+                     inc_win = inc_win,
+                     inc_pct_general = inc_pct_general,
+                     pop = pop,
+                     pop100k = pop100k) |> 
+  generate_weights() |> generate_control() 
+```
+
+```{r, dependson='synth_calif'}
+plot_weights(california_synth)
+grab_unit_weights(california_synth) |> arrange(desc(weight))
+plot_trends(california_synth) 
+```
+
+#### f)
+
+```{r synth_placebo}
+# Drop Seattle and generate placebos
+placebos_synth = balanced_df |> 
+  synthetic_control(outcome = candidates_ballot,
+                                 unit = city,
+                                 time = cycle,
+                                 i_unit = 'Seattle',
+                                 i_time = 8,
+                                 generate_placebos = T) |> 
+  generate_predictor(At_Large = At_Large, # I had to remove special because there's no variation in it for washington
+                     Pct_general = Pct_general,
+                     inc_run = inc_run,
+                     inc_win = inc_win,
+                     inc_pct_general = inc_pct_general,
+                     pop = pop,
+                     pop100k = pop100k) |> 
+  generate_weights() |> generate_control() 
+```
+
+```{r, dependson='synth_placebo'}
+plot_placebos(placebos_synth)
+```
 
 
 

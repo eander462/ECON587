@@ -1,7 +1,7 @@
 ---
 title: "HW4"
 author: "Erik Andersen"
-date: "2023-11-07"
+date: "2023-11-08"
 output: 
   html_document:
     toc: true
@@ -12,6 +12,8 @@ output:
     toc: true
   always_allow_html: true
 ---
+
+### Setup
 
 
 
@@ -26,13 +28,13 @@ here::i_am("HW4/HW4.Rmd")
 
 ```r
 # Load packages
-pacman::p_load(tidyverse, magrittr, estimatr, fixest, haven)
+pacman::p_load(tidyverse, magrittr, estimatr, fixest, plm, systemfit, tidysynth)
 ```
 
 
 ```r
 # Load data
-election_df = read_dta(here::here("HW4", "data", "GriffithNoonen2022_Econ587.dta"))
+election_df = haven::read_dta(here::here("HW4", "data", "GriffithNoonen2022_Econ587.dta"))
 ```
 
 ### Question 1
@@ -190,7 +192,7 @@ summary(cross_after)$coefficients[2,1] - summary(cross_before)$coefficients[2,1]
 
 ```r
 # Diff-in-Diff
-election_df %>% lm_robust(candidates_ballot ~ post*treatment + At_Large*Special,., clusters = city_cycle) # 2.8
+(diff_in_diff = election_df %>% lm_robust(candidates_ballot ~ post*treatment + At_Large*Special,., clusters = city_cycle)) # 2.8
 ```
 
 ```
@@ -221,7 +223,7 @@ election_df %>% lm_robust(candidates_ballot ~ post*treatment + At_Large*Special,
 
 ```r
 # two way fixed effects. We're switching regression functions here because it has prettier output, and seems to calculate standard errors in a slightly different way that matches the paper
-election_df %>% feols(candidates_ballot ~ post*treatment | as.factor(city) + as.factor(cycle) + At_Large*Special,., cluster = "city_cycle") # Point estimate and se match
+(two_way = election_df %>% feols(candidates_ballot ~ post*treatment | as.factor(city) + as.factor(cycle) + At_Large*Special,., cluster = "city_cycle"))# Point estimate and se match
 ```
 
 ```
@@ -234,7 +236,7 @@ election_df %>% feols(candidates_ballot ~ post*treatment | as.factor(city) + as.
 ## Fixed-effects: as.factor(city): 15,  as.factor(cycle): 10,  At_Large: 2,  Special: 2,  At_Large:Special: 2
 ## Standard-errors: Clustered (city_cycle) 
 ##                Estimate   Std. Error    t value   Pr(>|t|)    
-## treatment      0.242134 1.017151e+05 0.00000238 1.0000e+00    
+## treatment      0.242137 1.017151e+05 0.00000238 1.0000e+00    
 ## post:treatment 3.232271 5.569880e-01 5.80312202 3.7753e-08 ***
 ## ... 1 variable was removed because of collinearity (post)
 ## ---
@@ -358,65 +360,105 @@ election_df |> mutate(`seattle*cycle` = seattle*cycle, `seattle*post` = seattle*
 
 
 ```r
-# Define cities in washington
-washington = c('Bellevue', 'Everett', 'Seattle', 'Spokane', 'Tacome', 'Vancouver')
-
 # Run part g again but only with cities in washington
-election_df |> filter(city %in% washington) |> 
+election_df |> filter(state == 'Wash') |> 
   mutate(`seattle*cycle` = seattle*cycle, `seattle*post` = seattle*post) %>%
   feols(candidates_ballot ~ cycle +  `seattle*cycle` + `seattle*post` + At_Large*Special + as.factor(city),., cluster = "city_cycle")
 ```
 
 ```
 ## OLS estimation, Dep. Var.: candidates_ballot
-## Observations: 195 
+## Observations: 271 
 ## Standard-errors: Clustered (city_cycle) 
 ##                            Estimate Std. Error   t value   Pr(>|t|)    
-## (Intercept)              -67.347769  37.689970 -1.786888 0.08014232 .  
-## cycle                      0.035202   0.018741  1.878362 0.06628830 .  
-## `seattle*cycle`           -0.045531   0.071222 -0.639291 0.52561091    
-## `seattle*post`             3.376816   0.807774  4.180399 0.00011966 ***
-## At_Large                  -1.230705   0.340084 -3.618824 0.00069948 ***
-## Special                    0.657323   0.565903  1.161548 0.25104621    
-## as.factor(city)Everett    -0.033712   0.246263 -0.136895 0.89167510    
-## as.factor(city)Seattle    92.872648 142.950757  0.649683 0.51893132    
-## as.factor(city)Spokane     0.448190   0.397283  1.128139 0.26475465    
-## as.factor(city)Vancouver  -0.574977   0.410939 -1.399178 0.16805836    
-## At_Large:Special          -0.636630   0.742927 -0.856921 0.39565997    
+## (Intercept)              -38.240157  32.816162 -1.165284 0.24791658    
+## cycle                      0.020719   0.016317  1.269808 0.20841874    
+## `seattle*cycle`           -0.030685   0.070213 -0.437022 0.66346011    
+## `seattle*post`             3.377484   0.803842  4.201678 0.00007792 ***
+## At_Large                  -1.224017   0.336493 -3.637574 0.00052659 ***
+## Special                    0.421414   0.472777  0.891358 0.37583467    
+## as.factor(city)Everett    -0.037126   0.244028 -0.152136 0.87952347    
+## as.factor(city)Kent       -1.089632   0.434107 -2.510054 0.01442061 *  
+## as.factor(city)Seattle    63.028414 140.921960  0.447258 0.65608998    
+## as.factor(city)Spokane     0.452110   0.402590  1.123002 0.26532891    
+## as.factor(city)Tacoma     -0.530504   0.458624 -1.156731 0.25137154    
+## as.factor(city)Vancouver  -0.544142   0.414108 -1.314009 0.19319503    
+## At_Large:Special          -0.392882   0.673163 -0.583636 0.56136840    
 ## ---
 ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## RMSE: 1.3517   Adj. R2: 0.442717
+## RMSE: 1.30606   Adj. R2: 0.39376
 ```
 
 ```r
 # Now just with california cities
-election_df |> filter((!city %in% washington) | city == 'Seattle') |> 
+election_df |> filter(state == "Calif" | city == 'Seattle') |> 
   mutate(`seattle*cycle` = seattle*cycle, `seattle*post` = seattle*post) %>%
   feols(candidates_ballot ~ cycle +  `seattle*cycle` + `seattle*post` + At_Large*Special + as.factor(city),., cluster = "city_cycle")
 ```
 
 ```
 ## OLS estimation, Dep. Var.: candidates_ballot
-## Observations: 543 
+## Observations: 467 
 ## Standard-errors: Clustered (city_cycle) 
-##                            Estimate Std. Error   t value  Pr(>|t|)    
-## (Intercept)               -9.826478  46.565432 -0.211025 0.8332617    
-## cycle                      0.006389   0.023168  0.275771 0.7832463    
-## `seattle*cycle`            0.007140   0.078603  0.090836 0.9277897    
-## `seattle*post`             3.471337   0.941508  3.686996 0.0003555 ***
-## At_Large                  -0.621219   0.532226 -1.167209 0.2456732    
-## Special                    2.181872   0.687590  3.173217 0.0019593 ** 
-## as.factor(city)Kent       -0.744691   0.405692 -1.835607 0.0691419 .  
-## as.factor(city)Long Beach  0.404629   0.452604  0.894001 0.3732911    
-## ... 9 coefficients remaining (display them with summary() or use argument n)
+##                                Estimate Std. Error   t value   Pr(>|t|)    
+## (Intercept)                  -16.696634  54.165717 -0.308251 7.5861e-01    
+## cycle                          0.009805   0.026949  0.363813 7.1686e-01    
+## `seattle*cycle`                0.003645   0.079923  0.045607 9.6373e-01    
+## `seattle*post`                 3.471152   0.942289  3.683745 3.9410e-04 ***
+## At_Large                      -0.622814   0.532903 -1.168718 2.4564e-01    
+## Special                        2.263234   0.705515  3.207917 1.8588e-03 ** 
+## as.factor(city)Long Beach      0.399402   0.453965  0.879808 3.8133e-01    
+## as.factor(city)Los Angeles     0.725977   0.510028  1.423405 1.5811e-01    
+## as.factor(city)Oakland         0.649710   0.482584  1.346316 1.8162e-01    
+## as.factor(city)Sacramento     -0.371266   0.459199 -0.808509 4.2095e-01    
+## as.factor(city)San Diego       1.430143   0.523890  2.729852 7.6370e-03 ** 
+## as.factor(city)San Francisco   2.321297   0.748241  3.102337 2.5728e-03 ** 
+## as.factor(city)San Jose        0.586129   0.429198  1.365639 1.7549e-01    
+## as.factor(city)Seattle        -6.007003 160.509657 -0.037425 9.7023e-01    
+## At_Large:Special              -3.903134   0.766237 -5.093899 1.9486e-06 ***
 ## ---
 ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## RMSE: 2.56307   Adj. R2: 0.142188
+## RMSE: 2.72111   Adj. R2: 0.118186
 ```
 
 ### Question 2
 
-#### Part a)
+#### Part b)
+
+
+```r
+# First we have to refine the models as the appropriate type of object because r is kinda stupid
+diff_in_diff_plm = election_df %>% plm(candidates_ballot ~ post*treatment + At_Large*Special,.)
+```
+
+```
+## Warning in pdata.frame(data, index): duplicate couples (id-time) in resulting pdata.frame
+##  to find out which, use, e.g., table(index(your_pdataframe), useNA = "ifany")
+```
+
+```r
+two_way_plm = election_df %>% feols(candidates_ballot ~ post*treatment + as.factor(city) + as.factor(cycle) + At_Large*Special,.)
+```
+
+```
+## The variables 'as.factor(city)Seattle' and 'as.factor(cycle)2019' have been removed because of collinearity (see $collin.var).
+```
+
+```r
+# Test with phtest from plm
+plm::phtest(diff_in_diff_plm, two_way_plm)
+```
+
+```
+## 
+## 	Hausman Test
+## 
+## data:  candidates_ballot ~ post * treatment + At_Large * Special
+## chisq = 5.5693, df = 5, p-value = 0.3504
+## alternative hypothesis: one model is inconsistent
+```
+
+#### Part c)
 
 
 
@@ -436,6 +478,287 @@ election_df |> filter((!city %in% washington) | city == 'Seattle') |>
 
 
 
+
+
+
+
+
+
+
+
+
+
+### Question 3
+
+
+```r
+# Collapse by city_cycle 
+balanced_df = election_df |> 
+  mutate(cycle = factor(election_df$cycle, labels = 1:10), # Renumber cycles 1 through 10
+         city_cycle = as.factor(city):as.factor(cycle)) |> # Remake this variable using new numbering
+  group_by(city_cycle) |> 
+  summarise(candidates_ballot = mean(candidates_ballot, na.rm = T),
+            post = mean(post, na.rm = T),
+            treatment = mean(treatment, na.rm = T),
+            At_Large = mean(At_Large, na.rm = T),
+            Special = mean(Special, na.rm = T),
+            seattle = mean(seattle, na.rm = T),
+            Pct_general = mean(Pct_general, na.rm = T),
+            inc_run = mean(inc_run, na.rm = T),
+            inc_win = mean(inc_win, na.rm = T),
+            inc_pct_general = mean(inc_pct_general, na.rm = T),
+            Votes_total_general = mean(Votes_total_general, na.rm = T),
+            donors = mean(donors, na.rm = T),
+            total_Less200 = mean(total_Less200, na.rm = T),
+            donors_Less200  = mean(donors_Less200, na.rm = T),
+            pop = mean(pop, na.rm = T),
+            pop100k = mean(pop100k, na.rm = T),
+            state = unique(state)) |> 
+  mutate(city = stringr::word(city_cycle, sep = ":"),
+         cycle = as.numeric(stringr::word(city_cycle, start = -1, sep = ":")))
+```
+
+#### a)
+
+
+```r
+(balanced_dd = balanced_df %>% lm_robust(candidates_ballot ~ post*treatment + At_Large*Special,., clusters = city_cycle)) # 3.1
+```
+
+```
+##                    Estimate Std. Error   t value     Pr(>|t|)     CI Lower
+## (Intercept)       3.3401293  0.1480135 22.566386 2.056905e-37  3.045788596
+## post              0.4599459  0.2317381  1.984766 5.384058e-02 -0.007956569
+## treatment         1.3007818  0.3151338  4.127713 1.558274e-03  0.610131373
+## At_Large         -1.1388473  0.2237478 -5.089871 4.992818e-05 -1.604442178
+## Special           2.7139952  1.2718688  2.133864 4.412227e-02  0.077957966
+## post:treatment    3.1471380  0.5398269  5.829902 3.463689e-02  0.598376846
+## At_Large:Special -3.8642866  1.6287793 -2.372505 2.829334e-02 -7.271621670
+##                    CI Upper        DF
+## (Intercept)       3.6344700 84.006723
+## post              0.9278485 41.296486
+## treatment         1.9914322 11.399532
+## At_Large         -0.6732524 20.790281
+## Special           5.3500325 22.241167
+## post:treatment    5.6958992  1.825647
+## At_Large:Special -0.4569515 19.144368
+```
+
+#### b)
+
+
+```r
+(balanced_two = balanced_df %>% feols(candidates_ballot ~ post*treatment | as.factor(city) + as.factor(cycle) + At_Large*Special,., cluster = "city_cycle"))
+```
+
+```
+## The variable 'post' has been removed because of collinearity (see $collin.var).
+```
+
+```
+## OLS estimation, Dep. Var.: candidates_ballot
+## Observations: 150 
+## Fixed-effects: as.factor(city): 15,  as.factor(cycle): 10,  At_Large: 5,  Special: 11,  At_Large:Special: 3
+## Standard-errors: Clustered (city_cycle) 
+##                Estimate   Std. Error   t value   Pr(>|t|)    
+## treatment      -1.61004 14096.048238 -0.000114 9.9991e-01    
+## post:treatment  3.58461     0.390617  9.176783 3.4324e-16 ***
+## ... 1 variable was removed because of collinearity (post)
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## RMSE: 0.857167     Adj. R2: 0.503075
+##                  Within R2: 0.085821
+```
+
+#### c)
+
+
+```r
+# Generate synthetic object
+all_synth = balanced_df |> synthetic_control(outcome = candidates_ballot,
+                                 unit = city,
+                                 time = cycle,
+                                 i_unit = 'Seattle',
+                                 i_time = 8) |> 
+  # I can only use these predictors because for pretty much all other values there are some city/cycles where there are no observations which breaks this
+  generate_predictor(At_Large = At_Large, 
+                     Special = Special,
+                     Pct_general = Pct_general,
+                     inc_run = inc_run,
+                     inc_win = inc_win,
+                     inc_pct_general = inc_pct_general,
+                     pop = pop,
+                     pop100k = pop100k) |> 
+  generate_weights() |> generate_control() 
+```
+
+
+```r
+plot_weights(all_synth)
+```
+
+![](HW4_files/figure-html/unnamed-chunk-14-1.png)<!-- -->
+
+```r
+grab_unit_weights(all_synth) |> arrange(desc(weight))
+```
+
+```
+## # A tibble: 14 × 2
+##    unit                weight
+##    <chr>                <dbl>
+##  1 San Diego     0.433       
+##  2 Spokane       0.344       
+##  3 Tacoma        0.146       
+##  4 Oakland       0.0715      
+##  5 Los Angeles   0.00103     
+##  6 Sacramento    0.00102     
+##  7 San Francisco 0.00101     
+##  8 Long Beach    0.000939    
+##  9 Kent          0.000676    
+## 10 Fresno        0.000675    
+## 11 Bellevue      0.000157    
+## 12 Everett       0.00000312  
+## 13 Vancouver     0.00000145  
+## 14 San Jose      0.0000000318
+```
+
+```r
+plot_trends(all_synth)
+```
+
+![](HW4_files/figure-html/unnamed-chunk-14-2.png)<!-- -->
+
+
+#### d)
+
+
+```r
+# Generate synthetic control for only cities in washington
+washington_synth = balanced_df |> filter(state == 'Wash') |> 
+  synthetic_control(outcome = candidates_ballot,
+                                 unit = city,
+                                 time = cycle,
+                                 i_unit = 'Seattle',
+                                 i_time = 8) |> 
+  generate_predictor(At_Large = At_Large, # I had to remove special because there's no variation in it for washington
+                     Pct_general = Pct_general,
+                     inc_run = inc_run,
+                     inc_win = inc_win,
+                     inc_pct_general = inc_pct_general,
+                     pop = pop,
+                     pop100k = pop100k) |> 
+  generate_weights() |> generate_control() 
+```
+
+
+```r
+plot_weights(washington_synth)
+```
+
+![](HW4_files/figure-html/unnamed-chunk-15-1.png)<!-- -->
+
+```r
+grab_unit_weights(washington_synth) |> arrange(desc(weight))
+```
+
+```
+## # A tibble: 6 × 2
+##   unit           weight
+##   <chr>           <dbl>
+## 1 Tacoma    0.528      
+## 2 Spokane   0.472      
+## 3 Everett   0.00000800 
+## 4 Vancouver 0.00000600 
+## 5 Kent      0.00000440 
+## 6 Bellevue  0.000000326
+```
+
+```r
+plot_trends(washington_synth)
+```
+
+![](HW4_files/figure-html/unnamed-chunk-15-2.png)<!-- -->
+
+#### e)
+
+
+```r
+# Generate synthetic control for only cities in washington
+california_synth = balanced_df |> filter(state == 'Calif' | city == 'Seattle') |> 
+  synthetic_control(outcome = candidates_ballot,
+                                 unit = city,
+                                 time = cycle,
+                                 i_unit = 'Seattle',
+                                 i_time = 8) |> 
+  generate_predictor(Pct_general = Pct_general,
+                     inc_run = inc_run,
+                     inc_win = inc_win,
+                     inc_pct_general = inc_pct_general,
+                     pop = pop,
+                     pop100k = pop100k) |> 
+  generate_weights() |> generate_control() 
+```
+
+
+```r
+plot_weights(california_synth)
+```
+
+![](HW4_files/figure-html/unnamed-chunk-16-1.png)<!-- -->
+
+```r
+grab_unit_weights(california_synth) |> arrange(desc(weight))
+```
+
+```
+## # A tibble: 8 × 2
+##   unit             weight
+##   <chr>             <dbl>
+## 1 San Diego     0.456    
+## 2 Long Beach    0.338    
+## 3 Fresno        0.107    
+## 4 Sacramento    0.0338   
+## 5 Oakland       0.0270   
+## 6 Los Angeles   0.0243   
+## 7 San Francisco 0.0145   
+## 8 San Jose      0.0000237
+```
+
+```r
+plot_trends(california_synth) 
+```
+
+![](HW4_files/figure-html/unnamed-chunk-16-2.png)<!-- -->
+
+#### f)
+
+
+```r
+# Drop Seattle and generate placebos
+placebos_synth = balanced_df |> 
+  synthetic_control(outcome = candidates_ballot,
+                                 unit = city,
+                                 time = cycle,
+                                 i_unit = 'Seattle',
+                                 i_time = 8,
+                                 generate_placebos = T) |> 
+  generate_predictor(At_Large = At_Large, # I had to remove special because there's no variation in it for washington
+                     Pct_general = Pct_general,
+                     inc_run = inc_run,
+                     inc_win = inc_win,
+                     inc_pct_general = inc_pct_general,
+                     pop = pop,
+                     pop100k = pop100k) |> 
+  generate_weights() |> generate_control() 
+```
+
+
+```r
+plot_placebos(placebos_synth)
+```
+
+![](HW4_files/figure-html/unnamed-chunk-17-1.png)<!-- -->
 
 
 
