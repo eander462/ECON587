@@ -2,8 +2,18 @@
 title: "HW4"
 author: "Erik Andersen"
 date: "`r Sys.Date()`"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 5
+    keep_md: yes
+  pdf_document:
+    toc: true
+  always_allow_html: true
 ---
+
+### Setup
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
@@ -14,12 +24,12 @@ knitr::opts_chunk$set(echo = TRUE,
 here::i_am("HW4/HW4.Rmd")
 
 # Load packages
-pacman::p_load(tidyverse, magrittr, estimatr, fixest, haven)
+pacman::p_load(tidyverse, magrittr, estimatr, fixest, plm, systemfit, tidysynth)
 ```
 
 ```{r}
 # Load data
-election_df = read_dta(here::here("HW4", "data", "GriffithNoonen2022_Econ587.dta"))
+election_df = haven::read_dta(here::here("HW4", "data", "GriffithNoonen2022_Econ587.dta"))
 ```
 
 ### Question 1
@@ -28,7 +38,7 @@ Note: lm_robust and feols seem to calculate clustered standard errors differentl
 
 #### a)
 
-```{r}
+```{r data}
 # Generate treatment dummy and city/cycle pair for clustering
 election_df %<>% mutate(post = if_else(cycle >= 2017, 1, 0), 
                         treatment = if_else(city == 'Seattle', 1, 0),
@@ -67,6 +77,7 @@ summary(before_after_seattle)$coefficients[2,1] - summary(before_after_other)$co
 
 # Diff between
 summary(cross_after)$coefficients[2,1] - summary(cross_before)$coefficients[2,1]
+
 ```
 
 
@@ -74,7 +85,7 @@ summary(cross_after)$coefficients[2,1] - summary(cross_before)$coefficients[2,1]
 
 ```{r}
 # Diff-in-Diff
-election_df %>% lm_robust(candidates_ballot ~ post*treatment + At_Large*Special,., clusters = city_cycle) # 2.8
+(diff_in_diff = election_df %>% lm_robust(candidates_ballot ~ post*treatment + At_Large*Special,., clusters = city_cycle)) # 2.8
 
 # Coeff of interest is post:treatment
 ```
@@ -83,7 +94,7 @@ election_df %>% lm_robust(candidates_ballot ~ post*treatment + At_Large*Special,
 
 ```{r}
 # two way fixed effects. We're switching regression functions here because it has prettier output, and seems to calculate standard errors in a slightly different way that matches the paper
-election_df %>% feols(candidates_ballot ~ post*treatment | as.factor(city) + as.factor(cycle) + At_Large*Special,., cluster = "city_cycle") # Point estimate and se match
+(two_way = election_df %>% feols(candidates_ballot ~ post*treatment | as.factor(city) + as.factor(cycle) + At_Large*Special,., cluster = "city_cycle"))# Point estimate and se match
 
 # Coeff of interest is post:treatment
 ```
@@ -115,18 +126,34 @@ election_df |> mutate(`seattle*cycle` = seattle*cycle, `seattle*post` = seattle*
 #### h)
 
 ```{r}
-# Define cities in washington
-washington = c('Bellevue', 'Everett', 'Seattle', 'Spokane', 'Tacome', 'Vancouver')
-
 # Run part g again but only with cities in washington
-election_df |> filter(city %in% washington) |> 
+election_df |> filter(state == 'Wash') |> 
   mutate(`seattle*cycle` = seattle*cycle, `seattle*post` = seattle*post) %>%
   feols(candidates_ballot ~ cycle +  `seattle*cycle` + `seattle*post` + At_Large*Special + as.factor(city),., cluster = "city_cycle")
 
 # Now just with california cities
-election_df |> filter((!city %in% washington) | city == 'Seattle') |> 
+election_df |> filter(state == "Calif" | city == 'Seattle') |> 
   mutate(`seattle*cycle` = seattle*cycle, `seattle*post` = seattle*post) %>%
   feols(candidates_ballot ~ cycle +  `seattle*cycle` + `seattle*post` + At_Large*Special + as.factor(city),., cluster = "city_cycle")
+```
+
+### Question 2
+
+#### Part b)
+
+```{r}
+# First we have to refine the models as the appropriate type of object because r is kinda stupid
+diff_in_diff_plm = election_df %>% plm(candidates_ballot ~ post*treatment + At_Large*Special,.)
+two_way_plm = election_df %>% feols(candidates_ballot ~ post*treatment + as.factor(city) + as.factor(cycle) + At_Large*Special,.)
+
+# Test with phtest from plm
+plm::phtest(diff_in_diff_plm, two_way_plm)
+```
+
+#### Part c)
+
+```{r}
+
 ```
 
 
@@ -140,6 +167,79 @@ election_df |> filter((!city %in% washington) | city == 'Seattle') |>
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Question 3
+
+```{r}
+# Collapse by city_cycle 
+balanced_df = election_df |> 
+  mutate(cycle = factor(election_df$cycle, labels = 1:10), # Renumber cycles 1 through 10
+         city_cycle = as.factor(city):as.factor(cycle)) |> # Remake this variable using new numbering
+  group_by(city_cycle) |> 
+  summarise(candidates_ballot = mean(candidates_ballot, na.rm = T),
+            post = mean(post, na.rm = T),
+            treatment = mean(treatment, na.rm = T),
+            At_Large = mean(At_Large, na.rm = T),
+            Special = mean(Special, na.rm = T),
+            seattle = mean(seattle, na.rm = T),
+            Pct_general = mean(Pct_general, na.rm = T),
+            inc_run = mean(inc_run, na.rm = T),
+            inc_win = mean(inc_win, na.rm = T),
+            inc_pct_general = mean(inc_pct_general, na.rm = T),
+            Votes_total_general = mean(Votes_total_general, na.rm = T),
+            donors = mean(donors, na.rm = T),
+            total_Less200 = mean(total_Less200, na.rm = T),
+            donors_Less200  = mean(donors_Less200, na.rm = T),
+            pop = mean(pop, na.rm = T),
+            pop100k = mean(pop100k, na.rm = T)) |> 
+  mutate(city = stringr::word(city_cycle, sep = ":"),
+         cycle = stringr::word(city_cycle, start = -1, sep = ":"))
+```
+
+#### a)
+
+```{r}
+(balanced_dd = balanced_df %>% lm_robust(candidates_ballot ~ post*treatment + At_Large*Special,., clusters = city_cycle)) # 3.1
+```
+
+#### b)
+
+```{r}
+(balanced_two = balanced_df %>% feols(candidates_ballot ~ post*treatment | as.factor(city) + as.factor(cycle) + At_Large*Special,., cluster = "city_cycle"))
+```
+
+#### c)
+
+```{r}
+balanced_df |> synthetic_control(outcome = candidates_ballot,
+                                 unit = city,
+                                 time = cycle,
+                                 i_unit = 'Seattle',
+                                 i_time = 8) |> 
+  generate_predictor(At_Large = At_Large,
+                     Special = Special,
+                     Pct_general = Pct_general,
+                     inc_run = inc_run,
+                     inc_win = inc_win,
+                     inc_pct_general = inc_pct_general,
+                     pop = pop,
+                     pop100k = pop100k) |> 
+  generate_weights() |> generate_control() |> plot_weights()
+```
 
 
 

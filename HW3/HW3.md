@@ -1,7 +1,7 @@
 ---
 title: "HW3"
 author: "Erik Andersen"
-date: "2023-10-30"
+date: "2023-11-07"
 output: 
   html_document:
     toc: true
