@@ -238,7 +238,7 @@ summary(cross_after)$coefficients[2,1] - summary(cross_before)$coefficients[2,1]
 ## Fixed-effects: as.factor(city): 15,  as.factor(cycle): 10,  At_Large: 2,  Special: 2,  At_Large:Special: 2
 ## Standard-errors: Clustered (city_cycle) 
 ##                Estimate   Std. Error    t value   Pr(>|t|)    
-## treatment      0.242134 1.017151e+05 0.00000238 1.0000e+00    
+## treatment      0.242137 1.017151e+05 0.00000238 1.0000e+00    
 ## post:treatment 3.232271 5.569880e-01 5.80312202 3.7753e-08 ***
 ## ... 1 variable was removed because of collinearity (post)
 ## ---
@@ -472,11 +472,25 @@ equation_e = candidates_ballot ~ post*treatment + as.factor(cycle)
 
 equation_list = list(d = equation_d, e = equation_e)
 
-# Estimate SUR
+# Estimate SUR. This package doesn't allow for clustered standard errors
 sur_reg = systemfit(equation_list, method = 'SUR', data = election_df)
 
-# Test if they're the same
-#linearHypothesis(sur_reg)
+# Test if treatment effects are the same
+linearHypothesis(sur_reg, c("d_post:treatment - e_post:treatment = 0"))
+```
+
+```
+## Linear hypothesis test (Theil's F test)
+## 
+## Hypothesis:
+## d_post:treatment - e_post:treatment = 0
+## 
+## Model 1: restricted model
+## Model 2: sur_reg
+## 
+##   Res.Df Df      F Pr(>F)
+## 1   1357                 
+## 2   1356  1 0.0917 0.7621
 ```
 
 ### Question 3
@@ -552,7 +566,7 @@ balanced_df = election_df |>
 ## Fixed-effects: as.factor(city): 15,  as.factor(cycle): 10,  At_Large: 5,  Special: 11,  At_Large:Special: 3
 ## Standard-errors: Clustered (city_cycle) 
 ##                Estimate   Std. Error   t value   Pr(>|t|)    
-## treatment      -1.61004 14096.048422 -0.000114 9.9991e-01    
+## treatment      -1.61004 14096.048393 -0.000114 9.9991e-01    
 ## post:treatment  3.58461     0.390617  9.176783 3.4324e-16 ***
 ## ... 1 variable was removed because of collinearity (post)
 ## ---

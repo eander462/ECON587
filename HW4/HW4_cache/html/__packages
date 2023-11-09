@@ -1,3 +1,10 @@
+base
+methods
+datasets
+utils
+grDevices
+graphics
+stats
 tidyverse
 ggplot2
 tibble
@@ -19,3 +26,6 @@ zoo
 lmtest
 systemfit
 tidysynth
+haven
+Synth
+recipes

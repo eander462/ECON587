@@ -3,13 +3,13 @@ title: "HW4"
 author: "Erik Andersen"
 date: "`r Sys.Date()`"
 output: 
-  pdf_document:
-    toc: true
   html_document:
     toc: true
     toc_float: true
     toc_depth: 5
     keep_md: yes
+  pdf_document:
+    toc: true
 ---
 
 ### Setup
@@ -162,11 +162,11 @@ equation_e = candidates_ballot ~ post*treatment + as.factor(cycle)
 
 equation_list = list(d = equation_d, e = equation_e)
 
-# Estimate SUR
+# Estimate SUR. This package doesn't allow for clustered standard errors
 sur_reg = systemfit(equation_list, method = 'SUR', data = election_df)
 
-# Test if they're the same
-#linearHypothesis(sur_reg)
+# Test if treatment effects are the same
+linearHypothesis(sur_reg, c("d_post:treatment - e_post:treatment = 0"))
 ```
 
 ### Question 3
@@ -223,7 +223,8 @@ all_synth = balanced_df |>
                     i_time = 8) |> 
   # I can only use these predictors because for pretty much all other values there are some city/cycles where there are no observations which breaks this
   
-  generate_predictor(At_Large = At_Large, 
+  generate_predictor(candidates_ballot = candidates_ballot,
+                     At_Large = At_Large, 
                      Special = Special,
                      Pct_general = Pct_general,
                      inc_run = inc_run,
@@ -254,7 +255,8 @@ washington_synth = balanced_df |> filter(state == 'Wash') |>
                     i_unit = 'Seattle',
                     i_time = 8) |> 
   
-  generate_predictor(At_Large = At_Large, # I had to remove special because there's no variation in it for washington
+  generate_predictor(candidates_ballot = candidates_ballot,
+                     At_Large = At_Large, # I had to remove special because there's no variation in it for washington
                      Pct_general = Pct_general,
                      inc_run = inc_run,
                      inc_win = inc_win,
@@ -283,7 +285,8 @@ california_synth = balanced_df |> filter(state == 'Calif' | city == 'Seattle') |
                     i_unit = 'Seattle',
                     i_time = 8) |> 
   
-  generate_predictor(Pct_general = Pct_general,
+  generate_predictor(candidates_ballot = candidates_ballot,
+                     Pct_general = Pct_general,
                      inc_run = inc_run,
                      inc_win = inc_win,
                      inc_pct_general = inc_pct_general,
