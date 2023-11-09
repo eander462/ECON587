@@ -10,7 +10,6 @@ output:
     toc_float: true
     toc_depth: 5
     keep_md: yes
-  always_allow_html: true
 ---
 
 ### Setup
@@ -44,7 +43,9 @@ election_df %<>% mutate(post = if_else(cycle >= 2017, 1, 0),
                         treatment = if_else(city == 'Seattle', 1, 0),
                         city_cycle = as.factor(city):as.factor(cycle),
                         seattle = if_else(city == 'Seattle', 1, 0))
+```
 
+```{r, dependson='data'}
 # Run naive regression
 election_df %>% lm_robust(candidates_ballot ~ treatment + At_Large*Special,., clusters = city_cycle)
 ```
@@ -139,9 +140,11 @@ election_df |> filter(state == "Calif" | city == 'Seattle') |>
 
 ### Question 2
 
+
+
 #### Part b)
 
-```{r}
+```{r, dependson='data'}
 # First we have to refine the models as the appropriate type of object because r is kinda stupid
 diff_in_diff_plm = election_df %>% plm(candidates_ballot ~ post*treatment + At_Large*Special,.)
 two_way_plm = election_df %>% feols(candidates_ballot ~ post*treatment + as.factor(city) + as.factor(cycle) + At_Large*Special,.)
@@ -152,35 +155,19 @@ plm::phtest(diff_in_diff_plm, two_way_plm)
 
 #### Part c)
 
-```{r}
+```{r, dependson='data'}
+# Define formula objects from parts d and e because the SUR function takes in formulas not regression output
+equation_d = candidates_ballot ~ post*treatment + At_Large*Special
+equation_e = candidates_ballot ~ post*treatment + as.factor(cycle)
 
+equation_list = list(d = equation_d, e = equation_e)
+
+# Estimate SUR
+sur_reg = systemfit(equation_list, method = 'SUR', data = election_df)
+
+# Test if they're the same
+#linearHypothesis(sur_reg)
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### Question 3
 
@@ -372,12 +359,32 @@ placebo_weights = lapply(unique(noseattle_df$city),
 ```
 
 ```{r, dependson='synth_placebo_weights'}
-lapply(1:length(placebo_weights), function(i){
+weights = lapply(1:length(placebo_weights), function(i){
   placebo_weights = placebo_weights[[i]]
-  plot_weights(placebo_weights)
-  grab_unit_weights(placebo_weights)
+  out = unnest(select(placebo_weights,.original_data)[1,])[9,2]
+  synth = grab_synthetic_control(placebo_weights)[9,3]
+  
+  # Treatment
+  treatment = out - synth
+  return(treatment)
 })
+
+names(weights) = unique(noseattle_df$city)
+
+weights |> unlist()
 ```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
