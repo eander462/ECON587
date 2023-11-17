@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE,
 here::i_am("HW5/HW5.Rmd")
 
 # Load packages
-pacman::p_load(tidyverse, magrittr, rdd)
+pacman::p_load(tidyverse, magrittr, rdd, ivreg)
 ```
 
 ```{r data}
@@ -28,10 +28,10 @@ oz_df = haven::read_dta(here::here('HW5', "data", "Ozier_JHR_Econ587.dta"))
 
 ```{r clean_data, dependson='data'}
 # Generate indicator for treatment status. Treated if test > 0
-oz_df %<>% mutate(treatment = if_else(test > 0, 1, 0))
+oz_df = oz_df |>  mutate(treatment = if_else(test > 0, 1, 0))
 
 # Regress secondary on test score, treatment, and interaction
-oz_df %>% lm(secondary ~ test*treatment,.)
+oz_df %>% lm(secondary ~ test*treatment,.) |> broom::tidy()
 ```
 
 #### c)
@@ -42,7 +42,8 @@ restrict = c(0.8, 0.4, 0.2, 0.1)
 
 lapply(restrict, function(x){
   oz_df |> filter(abs(test) < x) %>%
-    lm(secondary ~ test*treatment,.)
+    lm(secondary ~ test*treatment,.) |> 
+    broom::tidy()
 })
 ```
 
@@ -50,12 +51,12 @@ lapply(restrict, function(x){
 
 ```{r, dependson='clean_data'}
 # Estimate rdd. Note default standard errors are heteroskedastic robust
-RDestimate(secondary ~ test, oz_df, cutpoint = 0)
+RDestimate(secondary ~ test, oz_df, cutpoint = 0) 
 ```
 
 #### e)
 
-```{r}
+```{r, dependson='clean_data'}
 # Plot rdd graph
 oz_df |> group_by(a = cut(test, 26)) |> 
   summarise(secondary=mean(secondary), test = mean(test)) |> 
@@ -66,14 +67,67 @@ oz_df |> group_by(a = cut(test, 26)) |>
     geom_vline(xintercept = 0, lty = 5) + 
     xlab("Test Score") + ylab("Probability of Completing\n Secondary School") + 
     cowplot::theme_cowplot()
+ggsave(here::here("HW5", "rdd_plot.pdf"))
 ```
 
+#### f)
 
+```{r, dependson='clean_data'}
+# Rerun esimation of rdd, but override default kernal and bandwidths
+RDestimate(secondary ~ test, oz_df, cutpoint = 0, kernel = 'rectangular', bw = 0.8)
+```
 
+#### g)
 
+```{r, dependson='clean_data'}
+ivreg(rv ~ secondary + test + female + test:treatment | 
+        treatment + test + female + test:treatment, data = oz_df) |> broom::tidy()
+```
 
+#### h)
 
+```{r,dependson='clean_data'}
+# Run estimate again, but use controls. Note the regressors are in the opposite order than the homework suggests. This is because the package wants the variables in the order running variable + endogenous treatment.
+RDestimate(rv ~ test + secondary, oz_df, cutpoint = 0)
+```
 
+#### i)
+
+```{r, dependson='clean_data'}
+# Replicate g result. I don't include test interacted with treatment because it gives insane results like the LATE is 20 and I don't know why
+RDestimate(rv ~ test + secondary | female , data = oz_df, cutpoint = 0,
+           kernel = 'rectangular', bw = 0.6)
+```
+
+### Question 2
+
+```{r simdata}
+# Load data
+sim_df = haven::read_dta(here::here("HW5", "data", "RD_Manip_Econ587.dta"))
+```
+
+#### a)
+
+```{r}
+# Plot kernel densities for all four measures of wealth for bandwidths 0.1, 0.05, 0.01
+lapply(c(0.1, 0.05, 0.01),
+       function(x) {
+         sim_df |> ggplot(aes(reportwealth1)) +
+           geom_density(bw = x) +
+           geom_density(aes(reportwealth2), bw = x, col = 'red') +
+           geom_density(aes(reportwealth3), bw = x, col = 'blue') +
+           geom_density(aes(reportwealth4), bw = x, col = 'green') +
+           xlab("Wealth Kernel Density") + ylab("") +
+           ggtitle(paste("Wealth Kernel Density with Bandwidth =", x)) +
+           labs(caption = "Black: Reported Wealth 1\n Red: Reported Wealth 2\n
+                Blue: Reported Wealth 3\n Green: Reported Wealth 4") +
+           cowplot::theme_cowplot()
+         ggsave(here::here("HW5", paste(
+           "Kernel_wealth_bandwidth_", x, ".pdf", sep = ""
+         )))
+       }
+)
+```
 
 
 
