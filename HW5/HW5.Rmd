@@ -1,0 +1,91 @@
+---
+title: "HW5"
+author: "Erik Andersen"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE)
+```
+
+```{r}
+here::i_am("HW5/HW5.Rmd")
+
+# Load packages
+pacman::p_load(tidyverse, magrittr, rdd)
+```
+
+```{r data}
+# Load data
+oz_df = haven::read_dta(here::here('HW5', "data", "Ozier_JHR_Econ587.dta"))
+```
+
+### Question 1
+
+#### a)
+
+```{r clean_data, dependson='data'}
+# Generate indicator for treatment status. Treated if test > 0
+oz_df %<>% mutate(treatment = if_else(test > 0, 1, 0))
+
+# Regress secondary on test score, treatment, and interaction
+oz_df %>% lm(secondary ~ test*treatment,.)
+```
+
+#### c)
+
+```{r, dependson='clean_data'}
+# Define restrictions
+restrict = c(0.8, 0.4, 0.2, 0.1)
+
+lapply(restrict, function(x){
+  oz_df |> filter(abs(test) < x) %>%
+    lm(secondary ~ test*treatment,.)
+})
+```
+
+#### d)
+
+```{r, dependson='clean_data'}
+# Estimate rdd. Note default standard errors are heteroskedastic robust
+RDestimate(secondary ~ test, oz_df, cutpoint = 0)
+```
+
+#### e)
+
+```{r}
+# Plot rdd graph
+oz_df |> group_by(a = cut(test, 26)) |> 
+  summarise(secondary=mean(secondary), test = mean(test)) |> 
+  ggplot(aes(test, secondary)) + 
+    geom_point() + 
+    geom_smooth(data = oz_df |> filter(test > 0), method = 'lm', col = 'black') +
+    geom_smooth(data = oz_df |> filter(test < 0), method = 'lm', col = 'black') +
+    geom_vline(xintercept = 0, lty = 5) + 
+    xlab("Test Score") + ylab("Probability of Completing\n Secondary School") + 
+    cowplot::theme_cowplot()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
