@@ -1,7 +1,7 @@
 ---
 title: "HW5"
 author: "Erik Andersen"
-date: "2023-11-17"
+date: "2023-11-18"
 output: html_document
 ---
 
@@ -229,7 +229,54 @@ RDestimate(rv ~ test + secondary | female , data = oz_df, cutpoint = 0,
 ##     0.744      1.266      0.670
 ```
 
+### Question 2
 
+
+```r
+# Load data
+sim_df = haven::read_dta(here::here("HW5", "data", "RD_Manip_Econ587.dta"))
+```
+
+#### a)
+
+
+```r
+# Plot kernel densities for all four measures of wealth for bandwidths 0.1, 0.05, 0.01
+lapply(c(0.1, 0.05, 0.01),
+       function(x) {
+         sim_df |> ggplot(aes(reportwealth1)) +
+           geom_density(bw = x) +
+           geom_density(aes(reportwealth2), bw = x, col = 'red') +
+           geom_density(aes(reportwealth3), bw = x, col = 'blue') +
+           geom_density(aes(reportwealth4), bw = x, col = 'green') +
+           xlab("Wealth Kernel Density") + ylab("") +
+           ggtitle(paste("Wealth Kernel Density with Bandwidth =", x)) +
+           labs(caption = "Black: Reported Wealth 1\n Red: Reported Wealth 2\n
+                Blue: Reported Wealth 3\n Green: Reported Wealth 4") +
+           cowplot::theme_cowplot()
+         ggsave(here::here("HW5", paste(
+           "Kernel_wealth_bandwidth_", x, ".pdf", sep = ""
+         )))
+       }
+)
+```
+
+```
+## Saving 7 x 5 in image
+## Saving 7 x 5 in image
+## Saving 7 x 5 in image
+```
+
+```
+## [[1]]
+## [1] "/Users/erikandersen/Documents/Classes/ECON 587/HW5/Kernel_wealth_bandwidth_0.1.pdf"
+## 
+## [[2]]
+## [1] "/Users/erikandersen/Documents/Classes/ECON 587/HW5/Kernel_wealth_bandwidth_0.05.pdf"
+## 
+## [[3]]
+## [1] "/Users/erikandersen/Documents/Classes/ECON 587/HW5/Kernel_wealth_bandwidth_0.01.pdf"
+```
 
 
 

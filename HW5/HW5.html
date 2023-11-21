@@ -11,7 +11,7 @@
 
 <meta name="author" content="Erik Andersen" />
 
-<meta name="date" content="2023-11-17" />
+<meta name="date" content="2023-11-18" />
 
 <title>HW5</title>
 
@@ -1481,7 +1481,7 @@ border-radius: 0px;
 
 <h1 class="title toc-ignore">HW5</h1>
 <h4 class="author">Erik Andersen</h4>
-<h4 class="date">2023-11-17</h4>
+<h4 class="date">2023-11-18</h4>
 
 </div>
 
@@ -1638,6 +1638,43 @@ RDestimate(rv ~ test + secondary | female , data = oz_df, cutpoint = 0,
 ## Coefficients:
 ##      LATE    Half-BW  Double-BW  
 ##     0.744      1.266      0.670</code></pre>
+</div>
+</div>
+<div id="question-2" class="section level3">
+<h3>Question 2</h3>
+<pre class="r"><code># Load data
+sim_df = haven::read_dta(here::here(&quot;HW5&quot;, &quot;data&quot;, &quot;RD_Manip_Econ587.dta&quot;))</code></pre>
+<div id="a-1" class="section level4">
+<h4>a)</h4>
+<pre class="r"><code># Plot kernel densities for all four measures of wealth for bandwidths 0.1, 0.05, 0.01
+lapply(c(0.1, 0.05, 0.01),
+       function(x) {
+         sim_df |&gt; ggplot(aes(reportwealth1)) +
+           geom_density(bw = x) +
+           geom_density(aes(reportwealth2), bw = x, col = &#39;red&#39;) +
+           geom_density(aes(reportwealth3), bw = x, col = &#39;blue&#39;) +
+           geom_density(aes(reportwealth4), bw = x, col = &#39;green&#39;) +
+           xlab(&quot;Wealth Kernel Density&quot;) + ylab(&quot;&quot;) +
+           ggtitle(paste(&quot;Wealth Kernel Density with Bandwidth =&quot;, x)) +
+           labs(caption = &quot;Black: Reported Wealth 1\n Red: Reported Wealth 2\n
+                Blue: Reported Wealth 3\n Green: Reported Wealth 4&quot;) +
+           cowplot::theme_cowplot()
+         ggsave(here::here(&quot;HW5&quot;, paste(
+           &quot;Kernel_wealth_bandwidth_&quot;, x, &quot;.pdf&quot;, sep = &quot;&quot;
+         )))
+       }
+)</code></pre>
+<pre><code>## Saving 7 x 5 in image
+## Saving 7 x 5 in image
+## Saving 7 x 5 in image</code></pre>
+<pre><code>## [[1]]
+## [1] &quot;/Users/erikandersen/Documents/Classes/ECON 587/HW5/Kernel_wealth_bandwidth_0.1.pdf&quot;
+## 
+## [[2]]
+## [1] &quot;/Users/erikandersen/Documents/Classes/ECON 587/HW5/Kernel_wealth_bandwidth_0.05.pdf&quot;
+## 
+## [[3]]
+## [1] &quot;/Users/erikandersen/Documents/Classes/ECON 587/HW5/Kernel_wealth_bandwidth_0.01.pdf&quot;</code></pre>
 </div>
 </div>
 

@@ -2,7 +2,9 @@
 title: "HW5"
 author: "Erik Andersen"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -129,13 +131,124 @@ lapply(c(0.1, 0.05, 0.01),
 )
 ```
 
+#### b)
 
 
 
+```{r}
+# Test smoothness around the cuttoff using ocular methods. Unfortunately to loop this over the four scenarios requires nonstandard evaluation which I haven't currently figured
+bandwidths = c(0.1, 0.01, 0.05)
+
+lapply(bandwidths, function(x){
+  sim_df |> filter(abs(reportwealth1) < x) |> 
+    select(reportwealth1)|>
+    ggplot(aes(reportwealth1)) +
+        geom_histogram(bins = 10) + 
+        geom_vline(xintercept = 0, color = 'red', lwd = 3) +
+        xlab("Report 1") + ylab("") + cowplot::theme_cowplot()
+})
+
+lapply(bandwidths, function(x){
+  sim_df |> filter(abs(reportwealth2) < x) |> 
+    select(reportwealth2)|>
+    ggplot(aes(reportwealth2)) +
+        geom_histogram(bins = 10) + 
+        geom_vline(xintercept = 0, color = 'red', lwd = 3)+
+        xlab("Report 2") + ylab("")+ cowplot::theme_cowplot()
+})
+
+lapply(bandwidths, function(x){
+  sim_df |> filter(abs(reportwealth3) < x) |> 
+    select(reportwealth3)|>
+    ggplot(aes(reportwealth3)) +
+        geom_histogram(bins = 10) + 
+        geom_vline(xintercept = 0, color = 'red', lwd = 3)+
+        xlab("Report 3") + ylab("")+ cowplot::theme_cowplot()
+})
+
+lapply(bandwidths, function(x){
+  sim_df |> filter(abs(reportwealth4) < x) |> 
+    select(reportwealth4)|>
+    ggplot(aes(reportwealth4)) +
+        geom_histogram(bins = 10) + 
+        geom_vline(xintercept = 0, color = 'red', lwd = 3)+
+        xlab("Report 4") + ylab("")+ cowplot::theme_cowplot()
+})
+```
+
+#### c)
+
+```{r}
+# McCrary kovac test
+vars = paste0("reportwealth", 1:4)
+
+# P-values are reported
+sapply(vars, function(x){
+  DCdensity(sim_df[[x]], cutpoint = 0)
+})
+
+```
+
+#### d)
+
+```{r}
+# Generate treatment variables equal to one if repored wealth is below 0
+sim_df %<>% mutate(treat1 = if_else(reportwealth1 < 0, 1, 0),
+                   treat2 = if_else(reportwealth2 < 0, 1, 0),
+                   treat3 = if_else(reportwealth3 < 0, 1, 0),
+                   treat4 = if_else(reportwealth4 < 0, 1, 0))
+
+# For each reported wealth generate the following 
+# new-wealth = true-wealth + 0.2*treat + e    e ~ N(0, 0.01)
+sim_df %<>% mutate(new_wealth1 = truewealth + 0.2 * treat1 + rnorm(nrow(sim_df), 0, sqrt(0.01)),
+                   new_wealth2 = truewealth + 0.2 * treat2 + rnorm(nrow(sim_df), 0, sqrt(0.01)),
+                   new_wealth3 = truewealth + 0.2 * treat3 + rnorm(nrow(sim_df), 0, sqrt(0.01)),
+                   new_wealth4 = truewealth + 0.2 * treat4 + rnorm(nrow(sim_df), 0, sqrt(0.01)))
+
+# Summarize the new wealths
+lapply(1:4, function(i){
+  pdf(here::here("HW5", paste0("new-wealth", i, ".pdf")))
+  plot(c(sim_df[paste0("reportwealth", i)]) |> unlist(), 
+       c(sim_df[paste0('new_wealth', i)]) |> unlist(),
+       xlab = paste0("Report Wealth", i),
+       ylab = paste0("New Wealth", i))
+  dev.off()
+})
+
+```
+
+#### e)
+
+```{r}
+lapply(1:4, function(i){ 
+  
+  # Generate formula
+  y = paste0("new_wealth", i)
+  treat = paste0("treat", i)
+  report = paste0("reportwealth", i)
+  x = paste(treat, report, sep = "*")
+  formula = paste(y, x, sep = "~")
+
+  # Run regression
+  lm(formula, sim_df) |> summary()
+})
+```
 
 
+#### f)
 
-
+```{r}
+lapply(1:4, function(i){
+  
+  # Generate formula
+  y = paste0("new_wealth", i)
+  x = paste0("reportwealth", i)
+  formula = paste(y, x, sep = "~")
+  
+  # Run rdd 
+  RDestimate(formula, sim_df)
+})
+```
 
 
 
