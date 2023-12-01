@@ -1,0 +1,70 @@
+---
+title: "HW6"
+author: "Erik Andersen"
+date: "2023-12-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      cache = TRUE)
+```
+
+```{r}
+# Load packages
+pacman::p_load(tidyverse, magrittr, estimatr, broom)
+```
+
+```{r}
+# Load data
+vote_df = haven::read_dta(here::here("HW6", "data", "GriffithNoonen2022_Econ587.dta"))
+
+# Clean names
+vote_df = janitor::clean_names(vote_df)
+
+# Add variables of interest for Did. 
+# Post = after 2017 which is the year of interest
+# Seattle = in seattle
+# Treat = interaction of post and seattle
+vote_df = vote_df |> 
+  mutate(post = if_else(election_year>= 2017, 1, 0),
+                    seattle = if_else(city == 'Seattle', 1, 0),
+                    treatment = post * seattle) |> 
+  select(post, seattle, treatment, everything())
+```
+
+### Question 1
+
+#### a)
+
+```{r}
+# did with regular SE's 
+did_reg_classical = lm_robust(candidates_ballot ~ post + seattle + treatment + at_large + special,
+                              vote_df,
+                              se_type = 'classical')
+# Extract standard error of coefficient of interest
+tidy(did_reg_classical) |> select(term, std.error, p.value) |> filter(term == 'treatment') # 0.958 
+
+# Rerun with HC robust SEs
+did_reg_hc = lm_robust(candidates_ballot ~ post + seattle + treatment + at_large + special,
+                              vote_df,
+                              se_type = 'stata')
+# Extract standard error again
+tidy(did_reg_hc) |> select(term, std.error, p.value) |> filter(term == 'treatment') # 0.987
+```
+
+#### b)
+
+```{r}
+# Construct residuals for both regressions. The lm_robust function doesn't calculat these automatically so we have to do it manually
+vote_df = vote_df |> mutate(resids = candidates_ballot - did_reg_classical$fitted.values)
+
+# Naive test for heteroskedasticity
+# resids^2 ~ treatment
+reg_hetero = lm_robust(I(resids^2) ~ treatment, 
+                       vote_df,
+                       se_type = 'classical')
+
+tidy(reg_hetero)
+```
+
