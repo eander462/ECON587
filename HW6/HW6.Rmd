@@ -2,12 +2,13 @@
 title: "HW6"
 author: "Erik Andersen"
 date: "2023-12-01"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, 
-                      cache = TRUE)
+knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
@@ -26,10 +27,14 @@ vote_df = janitor::clean_names(vote_df)
 # Post = after 2017 which is the year of interest
 # Seattle = in seattle
 # Treat = interaction of post and seattle
+# city_cycle = interaction of city and cycle
 vote_df = vote_df |> 
   mutate(post = if_else(election_year>= 2017, 1, 0),
                     seattle = if_else(city == 'Seattle', 1, 0),
-                    treatment = post * seattle) |> 
+                    treatment = post * seattle,
+                    city = as.factor(city),
+                    cycle = as.factor(cycle),
+                    city_cycle = city:cycle) |> 
   select(post, seattle, treatment, everything())
 ```
 
@@ -39,18 +44,19 @@ vote_df = vote_df |>
 
 ```{r}
 # did with regular SE's 
-did_reg_classical = lm_robust(candidates_ballot ~ post + seattle + treatment + at_large + special,
+did_reg_classical = lm_robust(candidates_ballot ~ post + seattle + treatment + at_large * special,
                               vote_df,
                               se_type = 'classical')
 # Extract standard error of coefficient of interest
 tidy(did_reg_classical) |> select(term, std.error, p.value) |> filter(term == 'treatment') # 0.958 
 
 # Rerun with HC robust SEs
-did_reg_hc = lm_robust(candidates_ballot ~ post + seattle + treatment + at_large + special,
+did_reg_hc = lm_robust(candidates_ballot ~ post + seattle + treatment + at_large * special,
                               vote_df,
                               se_type = 'stata')
 # Extract standard error again
 tidy(did_reg_hc) |> select(term, std.error, p.value) |> filter(term == 'treatment') # 0.987
+rm(did_reg_hc)
 ```
 
 #### b)
@@ -66,5 +72,107 @@ reg_hetero = lm_robust(I(resids^2) ~ treatment,
                        se_type = 'classical')
 
 tidy(reg_hetero)
+rm(reg_hetero)
+rm(did_reg_classical)
 ```
+
+#### c)
+
+```{r}
+# Cluster by city_cycle
+reg_city_cycle = lm_robust(candidates_ballot ~ post + seattle + treatment + at_large * special,
+                    vote_df,
+                    clusters = city_cycle,
+                    se_type = 'CR2') # CR2 is stata standard errors
+
+tidy(reg_city_cycle)
+rm(reg_city_cycle)
+```
+
+#### d)
+
+```{r}
+# Cluster by only city
+reg_city = lm_robust(candidates_ballot ~ post + seattle + treatment + at_large * special,
+                    vote_df,
+                    clusters = city, 
+                    se_type = 'CR2') # CR2 is stata standard errors
+tidy(reg_city)
+rm(reg_city)
+
+# Cluster by only cycle
+reg_cycle = lm_robust(candidates_ballot ~ post + seattle + treatment + at_large * special,
+                    vote_df,
+                    clusters = cycle,
+                    se_type = 'CR2') # CR2 is stata standard errors
+tidy(reg_cycle)
+rm(reg_cycle)
+```
+
+#### e)
+
+```{r}
+# Redo the earlier parts with the following new specifcation
+# candidates_ballot = cycle_fixed_effct + city_fixed_effect + treatment 
+
+# First redo part a 
+# Classical errors
+reg_two_way_classic = lm_robust(candidates_ballot ~ cycle + city + treatment, 
+                                vote_df,
+                                se_type = "classical")
+tidy(reg_two_way_classic)
+rm(reg_two_way_classic)
+# Het robust errors
+reg_two_way_hc = lm_robust(candidates_ballot ~ cycle + city + treatment, 
+                                vote_df,
+                                se_type = "stata")
+tidy(reg_two_way_hc)
+rm(reg_two_way_hc)
+
+# Redo part c
+# Clustered errors at city and cycle level
+reg_two_way_city_cycle = lm_robust(candidates_ballot ~ cycle + city + treatment + at_large * special,
+                    vote_df,
+                    clusters = city_cycle,
+                    se_type = 'CR2') # CR2 is stata standard errors
+
+tidy(reg_two_way_city_cycle)
+
+# Redo part d
+# Cluster by city only 
+reg_two_way_city = lm_robust(candidates_ballot ~ cycle + city + treatment + at_large * special,
+                    vote_df,
+                    clusters = city, 
+                    se_type = 'CR2') # CR2 is stata standard errors
+tidy(reg_two_way_city)
+
+# Cluster by only cycle
+reg_two_way_cycle = lm_robust(candidates_ballot ~ cycle + city + treatment + at_large * special,
+                    vote_df,
+                    clusters = cycle,
+                    se_type = 'CR2') # CR2 is stata standard errors
+tidy(reg_two_way_cycle)
+```
+
+#### f)
+
+```{r}
+# Cameron Miller two way clustering decomposition
+# Variance for clustering only by city
+var_city = reg_two_way_city$std.error["treatment"]^2
+
+# Variance for clustering only by cycle
+var_cycle = reg_two_way_cycle$std.error["treatment"]^2
+
+# Variance for clustering at the intersection of city and cycle
+var_intersection = reg_two_way_city_cycle$std.error["treatment"]^2
+
+# Calculate two way clustering variance
+se_two_way = sqrt(var_city + var_cycle - var_intersection)
+
+rm(reg_two_way_city, reg_two_way_cycle, reg_two_way_city_cycle,
+        var_city, var_cycle, var_intersection, se_two_way)
+```
+
+
 

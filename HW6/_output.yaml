@@ -1,1 +1,5 @@
-HW5/_output.yaml
+html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 5
+    keep_md: yes

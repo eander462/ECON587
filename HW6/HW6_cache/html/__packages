@@ -8,3 +8,6 @@ dplyr
 stringr
 forcats
 lubridate
+magrittr
+estimatr
+broom
