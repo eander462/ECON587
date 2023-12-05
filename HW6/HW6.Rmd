@@ -3,8 +3,8 @@ title: "HW6"
 author: "Erik Andersen"
 date: "2023-12-01"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -206,7 +206,7 @@ randomization_intersection = declare_ra(N = nrow(vote_df),
 
 # Inference
 conduct_ri(candidates_ballot ~ cycle + city + treatment + at_large * special,
-           declaration = randomization_naive,
+           declaration = randomization_intersection,
            assignment = "treatment",
            data = vote_df,
            sharp_hypothesis = 0,
@@ -350,4 +350,6 @@ greater = c(mean_effect) |> as_tibble() |> abs() |>  filter(value > 3.23227)
 rm(greater)
 rm(p_value)
 ```
+
+### Quesiton 3
 
