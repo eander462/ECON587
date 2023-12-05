@@ -214,7 +214,7 @@ conduct_ri(candidates_ballot ~ cycle + city + treatment + at_large * special,
 
 #### c)
 
-```{r}
+```{r, cache=TRUE}
 # Here we're manually doing the permutation. So first we're going to group gy city cycle and only return to variables we care about which are the variables in the twfe model
 # We also drop seattle so we only  have untreated units
 small_vote_df = vote_df |>
@@ -231,13 +231,13 @@ small_vote_df = vote_df |>
 mean_effect = matrix(NA, nrow(small_vote_df), nrow(small_vote_df))
 
 # Calculate mean effect for every permutation of two city-cycle pairs being treated
-for (i in 1:147) {
+for (i in 1:(nrow(small_vote_df) - 1)) {
   # this only goes to 147 so we don't double count
   
   # Outer loop. Two loops just make all the permutations of treatments
   small_vote_df$treatment[i] = 1
   
-  for (j in (i + 1):148) {
+  for (j in (i + 1):nrow(small_vote_df)) {
     # This starts at i+1 to avoid double counting
     
     # Inner loop
@@ -258,7 +258,7 @@ for (i in 1:147) {
     small_vote_df$treatment[j] = 0
   }
   
-  # Reset outer loop so we only have two treated units at at ime
+  # Reset outer loop so we only have two treated units at at time
   small_vote_df$treatment[i] = 0
 }
 
@@ -266,11 +266,29 @@ for (i in 1:147) {
 greater = c(mean_effect) |> as_tibble() |> abs() |>  filter(value > 3.23227) 
 
 (p_value = nrow(greater)/length(mean_effect))
+rm(greater)
+rm(p_value)
 ```
 
-
+#### d)
 
 ```{r}
-c(mean_effect) |> as_tibble() |> drop_na() |> abs() |> ggplot(aes(value)) + geom_histogram()
+# Standardize generated treatment effects
+mean_effect = mean_effect[!is.na(mean_effect)] |> c()
+mean_effect_standardized = (mean_effect - mean(mean_effect)) / sd(mean_effect)
+
+# plot the density
+mean_effect_standardized |> 
+  as_tibble() |> 
+  ggplot(aes(value)) + 
+    geom_density(color = 'red') + 
+    stat_function(fun = dnorm, args = list(mean = mean(mean_effect), sd = sd(mean_effect)), color = 'blue') + 
+    cowplot::theme_cowplot() + 
+    xlab("Standardized Treatment Effect") + ylab("") + 
+    labs(caption = "Red is data, blue is simulated distribution")
+ggsave(here::here("HW6", "plots", "ks.test.jpg"))
+
+# Test formally if densities are the same with ks density
+ks.test(mean_effect_standardized, "pnorm", mean = 0, sd = 1)
 ```
 
