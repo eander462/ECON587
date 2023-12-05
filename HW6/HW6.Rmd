@@ -193,6 +193,7 @@ conduct_ri(candidates_ballot ~ cycle + city + treatment + at_large * special,
            data = vote_df,
            sharp_hypothesis = 0,
            progress_bar = TRUE)
+rm(randomization_naive)
 ```
 
 #### b)
@@ -210,6 +211,7 @@ conduct_ri(candidates_ballot ~ cycle + city + treatment + at_large * special,
            data = vote_df,
            sharp_hypothesis = 0,
            progress_bar = TRUE)
+rm(randomization_intersection)
 ```
 
 #### c)
@@ -217,7 +219,7 @@ conduct_ri(candidates_ballot ~ cycle + city + treatment + at_large * special,
 ```{r, cache=TRUE}
 # Here we're manually doing the permutation. So first we're going to group gy city cycle and only return to variables we care about which are the variables in the twfe model
 # We also drop seattle so we only  have untreated units
-small_vote_df = vote_df |>
+city_cycle_df = vote_df |>
   group_by(city_cycle) |>
   summarise(treatment = mean(treatment),
             city = unique(city),
@@ -228,26 +230,26 @@ small_vote_df = vote_df |>
   filter(treatment == 0)
   
 # Create empty 148 by 148 matrix to put all permutations into
-mean_effect = matrix(NA, nrow(small_vote_df), nrow(small_vote_df))
+mean_effect = matrix(NA, nrow(city_cycle_df), nrow(city_cycle_df))
 
 # Calculate mean effect for every permutation of two city-cycle pairs being treated
-for (i in 1:(nrow(small_vote_df) - 1)) {
+for (i in 1:(nrow(city_cycle_df) - 1)) {
   # this only goes to 147 so we don't double count
   
   # Outer loop. Two loops just make all the permutations of treatments
-  small_vote_df$treatment[i] = 1
+  city_cycle_df$treatment[i] = 1
   
-  for (j in (i + 1):nrow(small_vote_df)) {
+  for (j in (i + 1):nrow(city_cycle_df )) {
     # This starts at i+1 to avoid double counting
     
     # Inner loop
-    small_vote_df$treatment[j] = 1
+    city_cycle_df$treatment[j] = 1
     
     # Calculate the treatment effect for treated and untreated groups
     effect = lm_robust( # I could use lm_robust_fit but I'm lazy so we can have a slow loop
       candidates_ballot ~ cycle + city + treatment + at_large * special,
-      small_vote_df,
-      clusters = cycle,
+      city_cycle_df,
+      clusters = city,
       se_type = 'CR2'
     )
     
@@ -255,11 +257,11 @@ for (i in 1:(nrow(small_vote_df) - 1)) {
     mean_effect[i, j] = coef(effect)["treatment"]
     
     # Reset treatment for inner loop. We need to do this so we only have two treated units at at time
-    small_vote_df$treatment[j] = 0
+    city_cycle_df$treatment[j] = 0
   }
   
   # Reset outer loop so we only have two treated units at at time
-  small_vote_df$treatment[i] = 0
+  city_cycle_df$treatment[i] = 0
 }
 
 # Now, to calculate the p value, we see what proportion of the treatment effects we generated above are greater than our observed treatment effect
@@ -290,5 +292,62 @@ ggsave(here::here("HW6", "plots", "ks.test.jpg"))
 
 # Test formally if densities are the same with ks density
 ks.test(mean_effect_standardized, "pnorm", mean = 0, sd = 1)
+rm(city_cycle_df)
+```
+
+#### e)
+
+```{r, cache=TRUE}
+# This is just gonna be copy pasted code from earlier but only collapsed by city. I should write a function, but again I'm lazy
+city_vote_df = vote_df |>
+  group_by(city) |>
+  summarise(treatment = mean(treatment),
+            city = unique(city),
+            candidates_ballot = mean(candidates_ballot, na.rm = T),
+            at_large = mean(at_large, na.rm = T),
+            special = mean(special, na.rm = T)) |> 
+  filter(treatment == 0)
+  
+# Create empty 148 by 148 matrix to put all permutations into
+mean_effect = matrix(NA, nrow(city_vote_df), nrow(city_vote_df))
+
+# Calculate mean effect for every permutation of two city-cycle pairs being treated
+for (i in 1:(nrow(city_vote_df) - 1)) {
+  # this only goes to 147 so we don't double count
+  
+  # Outer loop. Two loops just make all the permutations of treatments
+  city_vote_df$treatment[i] = 1
+  
+  for (j in (i + 1):nrow(city_vote_df)) {
+    # This starts at i+1 to avoid double counting
+    
+    # Inner loop
+    city_vote_df$treatment[j] = 1
+    
+    # Calculate the treatment effect for treated and untreated groups
+    effect = lm_robust( # I could use lm_robust_fit but I'm lazy so we can have a slow loop
+      candidates_ballot ~  city + treatment + at_large * special,
+      city_vote_df,
+      clusters = city,
+      se_type = 'CR2'
+    )
+    
+    # Calculate the treatment effect for each permutation and store it in output matrix
+    mean_effect[i, j] = coef(effect)["treatment"]
+    
+    # Reset treatment for inner loop. We need to do this so we only have two treated units at at time
+    city_vote_df$treatment[j] = 0
+  }
+  
+  # Reset outer loop so we only have two treated units at at time
+  city_vote_df$treatment[i] = 0
+}
+
+# Now, to calculate the p value, we see what proportion of the treatment effects we generated above are greater than our observed treatment effect
+greater = c(mean_effect) |> as_tibble() |> abs() |>  filter(value > 3.23227) 
+
+(p_value = nrow(greater)/length(mean_effect))
+rm(greater)
+rm(p_value)
 ```
 
